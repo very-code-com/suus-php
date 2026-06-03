@@ -1,0 +1,15 @@
+<?xml version="1.0" encoding="UTF-8"?>
+<SOAP-ENV:Envelope xmlns:SOAP-ENV="http://schemas.xmlsoap.org/soap/envelope/"
+                   xmlns:cw="ns1"
+                   xmlns:xsi="http://www.w3.org/2001/XMLSchema-instance"
+                   xmlns:xsd="http://www.w3.org/2001/XMLSchema">
+  <SOAP-ENV:Body>
+    <ns1:getDocumentResponse xmlns:ns1="cw">
+      <result>
+        <success xsi:type="xsd:boolean">true</success>
+        <returnCode xsi:type="xsd:string">CWS0001</returnCode>
+      </result>
+      <document xsi:type="xsd:string">JVBERi0xLjQKJeLjz9MKNSAwIG9iago8PAovVHlwZSAvUGFnZQo+PgplbmRvYmoK</document>
+    </ns1:getDocumentResponse>
+  </SOAP-ENV:Body>
+</SOAP-ENV:Envelope>

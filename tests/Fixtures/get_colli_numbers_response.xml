@@ -1,0 +1,22 @@
+<?xml version="1.0" encoding="UTF-8"?>
+<SOAP-ENV:Envelope xmlns:SOAP-ENV="http://schemas.xmlsoap.org/soap/envelope/"
+                   xmlns:cw="ns1"
+                   xmlns:xsi="http://www.w3.org/2001/XMLSchema-instance"
+                   xmlns:xsd="http://www.w3.org/2001/XMLSchema">
+  <SOAP-ENV:Body>
+    <ns1:getColliNoResponse xmlns:ns1="cw">
+      <result>
+        <success xsi:type="xsd:boolean">true</success>
+        <returnCode xsi:type="xsd:string">CWS0001</returnCode>
+      </result>
+      <shipments>
+        <shipment>
+          <shipmentNo xsi:type="xsd:string">OPLKRI2600895</shipmentNo>
+          <colliNo xsi:type="xsd:string">KRKRI2600895-1</colliNo>
+          <colliNo xsi:type="xsd:string">KRKRI2600895-2</colliNo>
+          <colliNo xsi:type="xsd:string">KRKRI2600895-3</colliNo>
+        </shipment>
+      </shipments>
+    </ns1:getColliNoResponse>
+  </SOAP-ENV:Body>
+</SOAP-ENV:Envelope>

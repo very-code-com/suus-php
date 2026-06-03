@@ -1,0 +1,13 @@
+suus-php
+PHP client for the SUUS Logistics (Rohlig Logistics) SOAP API
+
+Copyright 2025 Very Code
+Homepage: https://very-code.com
+Repository: https://github.com/very-code-com/suus-php
+
+This product is the first open-source PHP client for the SUUS/Rohlig Logistics
+SOAP API, providing shipment creation, status tracking, document download, and
+multi-country business-day scheduling.
+
+Licensed under the Apache License, Version 2.0.
+You must retain this NOTICE file in any redistribution or derivative work.

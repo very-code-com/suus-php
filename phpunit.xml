@@ -1,0 +1,22 @@
+<?xml version="1.0" encoding="UTF-8"?>
+<phpunit xmlns:xsi="http://www.w3.org/2001/XMLSchema-instance" xsi:noNamespaceSchemaLocation="https://schema.phpunit.de/11.5/phpunit.xsd" bootstrap="vendor/autoload.php" colors="true" failOnWarning="true" displayDetailsOnTestsThatTriggerWarnings="true">
+  <testsuites>
+    <testsuite name="unit">
+      <directory>tests/Unit</directory>
+    </testsuite>
+    <testsuite name="integration">
+      <directory>tests/Integration</directory>
+    </testsuite>
+  </testsuites>
+  <php>
+    <!-- Set SUUS_SANDBOX=1 and SUUS_LOGIN/SUUS_PASSWORD to run integration tests -->
+    <env name="SUUS_SANDBOX" value=""/>
+    <env name="SUUS_LOGIN" value=""/>
+    <env name="SUUS_PASSWORD" value=""/>
+  </php>
+  <source>
+    <include>
+      <directory>src</directory>
+    </include>
+  </source>
+</phpunit>

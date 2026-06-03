@@ -1,0 +1,15 @@
+<?xml version="1.0" encoding="UTF-8"?>
+<SOAP-ENV:Envelope xmlns:SOAP-ENV="http://schemas.xmlsoap.org/soap/envelope/"
+                   xmlns:cw="ns1"
+                   xmlns:xsi="http://www.w3.org/2001/XMLSchema-instance"
+                   xmlns:xsd="http://www.w3.org/2001/XMLSchema">
+  <SOAP-ENV:Body>
+    <ns1:addOrderResponse xmlns:ns1="cw">
+      <result>
+        <success xsi:type="xsd:boolean">true</success>
+        <returnCode xsi:type="xsd:string">CWS0001</returnCode>
+      </result>
+      <shipmentNo xsi:type="xsd:string">OPLKRI2600895</shipmentNo>
+    </ns1:addOrderResponse>
+  </SOAP-ENV:Body>
+</SOAP-ENV:Envelope>

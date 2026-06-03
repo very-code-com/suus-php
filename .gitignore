@@ -1,0 +1,11 @@
+/vendor/
+/composer.phar
+/.phpunit.result.cache
+/phpunit.xml.bak
+*.swp
+.DS_Store
+.claude/
+.idea/
+.copilot/
+.serena/
+/CLAUDE.md

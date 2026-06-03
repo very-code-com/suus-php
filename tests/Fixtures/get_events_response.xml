@@ -1,0 +1,49 @@
+<?xml version="1.0" encoding="UTF-8"?>
+<SOAP-ENV:Envelope xmlns:SOAP-ENV="http://schemas.xmlsoap.org/soap/envelope/"
+                   xmlns:cw="ns1"
+                   xmlns:xsi="http://www.w3.org/2001/XMLSchema-instance"
+                   xmlns:xsd="http://www.w3.org/2001/XMLSchema">
+  <SOAP-ENV:Body>
+    <ns1:getEventsResponse xmlns:ns1="cw">
+      <result>
+        <success xsi:type="xsd:boolean">true</success>
+        <returnCode xsi:type="xsd:string">CWS0001</returnCode>
+      </result>
+      <shipments>
+        <shipment>
+          <shipmentNo xsi:type="xsd:string">OPLKRI2600895</shipmentNo>
+          <events>
+            <event>
+              <code xsi:type="xsd:string">J_CR</code>
+              <date xsi:type="xsd:string">2025-06-01</date>
+              <time xsi:type="xsd:string">08:00:00</time>
+              <description xsi:type="xsd:string">Order registered</description>
+              <location xsi:type="xsd:string">Kraków</location>
+            </event>
+            <event>
+              <code xsi:type="xsd:string">KOL</code>
+              <date xsi:type="xsd:string">2025-06-02</date>
+              <time xsi:type="xsd:string">10:30:00</time>
+              <description xsi:type="xsd:string">Pickup scheduled</description>
+              <location xsi:type="xsd:string">Kraków</location>
+            </event>
+            <event>
+              <code xsi:type="xsd:string">LOAD</code>
+              <date xsi:type="xsd:string">2025-06-02</date>
+              <time xsi:type="xsd:string">14:00:00</time>
+              <description xsi:type="xsd:string">Loaded for transport</description>
+              <location xsi:type="xsd:string">Kraków Hub</location>
+            </event>
+            <event>
+              <code xsi:type="xsd:string">UNDI</code>
+              <date xsi:type="xsd:string">2025-06-04</date>
+              <time xsi:type="xsd:string">11:15:00</time>
+              <description xsi:type="xsd:string">Delivered to recipient</description>
+              <location xsi:type="xsd:string">Berlin</location>
+            </event>
+          </events>
+        </shipment>
+      </shipments>
+    </ns1:getEventsResponse>
+  </SOAP-ENV:Body>
+</SOAP-ENV:Envelope>
