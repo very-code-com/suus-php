@@ -258,6 +258,18 @@ vendor/bin/phpunit --testsuite unit
 # Integration tests against the real SUUS sandbox
 SUUS_LOGIN=ws_xxx SUUS_PASSWORD=xxx SUUS_ENV=sandbox \
   vendor/bin/phpunit --testsuite integration
+
+# Manual sandbox smoke test (creates a real shipment, prints raw SOAP request/response)
+SUUS_LOGIN=ws_xxx SUUS_PASSWORD=xxx php test_sandbox.php
+```
+
+The smoke test (`test_sandbox.php`) hits the sandbox endpoint directly and prints the full XML exchange — useful for verifying credentials and connectivity without running the full test suite. A successful run looks like:
+
+```
+--- SUCCESS ---
+Shipment No : OPLKRI2600931
+Reference   : TEST-20260603110000
+Tracking URL: https://portal.suus.com/order-details/OPLKRI2600931
 ```
 
 ---

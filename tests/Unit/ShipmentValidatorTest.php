@@ -212,6 +212,25 @@ final class ShipmentValidatorTest extends TestCase
         $this->assertEmpty($dimErrors, implode('; ', $errors));
     }
 
+    public function testEurPalletBelowMinHeightIsAnError(): void
+    {
+        $packages = [new Package(PackageSymbol::EUR, weightKg: 50.0, lengthCm: 120.0, widthCm: 80.0, heightCm: 15.0)];
+        $errors   = $this->validator->validate($this->makeOrder(['packages' => $packages]));
+
+        $this->assertTrue(
+            (bool) array_filter($errors, fn($e) => str_contains($e, 'heightCm') && str_contains($e, 'EUR')),
+            'Expected a min-height error for EUR, got: ' . implode('; ', $errors),
+        );
+    }
+
+    public function testEurPalletAtMinHeightIsOk(): void
+    {
+        $packages = [new Package(PackageSymbol::EUR, weightKg: 50.0, lengthCm: 120.0, widthCm: 80.0, heightCm: 20.0)];
+        $errors   = $this->validator->validate($this->makeOrder(['packages' => $packages]));
+        $dimErrors = array_filter($errors, fn($e) => str_contains($e, 'Cm'));
+        $this->assertEmpty($dimErrors, implode('; ', $errors));
+    }
+
     // ──────────────────────────────────────────────
     // Loading date - business day check
     // ──────────────────────────────────────────────

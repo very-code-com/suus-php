@@ -43,7 +43,7 @@ $order = new ShipmentOrder(
         phone:       '+48987654321',
     ),
     packages: [
-        new Package(PackageSymbol::EUR, weightKg: 120.0, lengthCm: 120.0, widthCm: 80.0, heightCm: 15.0),
+        new Package(PackageSymbol::EUR, weightKg: 120.0, lengthCm: 120.0, widthCm: 80.0, heightCm: 20.0),
         new Package(PackageSymbol::KAR, weightKg: 12.5,  lengthCm: 60.0,  widthCm: 40.0, heightCm: 30.0),
     ],
 );

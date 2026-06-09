@@ -8,6 +8,7 @@ use VeryCodeCom\Suus\Calendar\BusinessCalendarInterface;
 use VeryCodeCom\Suus\Calendar\CalendarFactory;
 use VeryCodeCom\Suus\Dto\Address;
 use VeryCodeCom\Suus\Dto\ShipmentOrder;
+use VeryCodeCom\Suus\Enum\PackageSymbol;
 
 /**
  * Validates a ShipmentOrder against SUUS API business rules before making the API call.
@@ -34,6 +35,11 @@ final class ShipmentValidator
     private const MAX_WIDTH_CM       = 120.0;
     private const MAX_HEIGHT_CM      = 220.0;
     private const MIN_ADVANCE_DAYS   = 2;
+
+    // Minimum heights per package symbol (confirmed from SUUS API responses)
+    private const MIN_HEIGHT_CM = [
+        'EUR' => 20.0,
+    ];
 
     // Field length limits per WSDL
     private const MAX_REFERENCE_LEN  = 50;
@@ -88,6 +94,11 @@ final class ShipmentValidator
             }
             if ($pkg->heightCm !== null && $pkg->heightCm > self::MAX_HEIGHT_CM) {
                 $errors[] = "packages[{$i}]: heightCm {$pkg->heightCm} exceeds max " . self::MAX_HEIGHT_CM . ' cm.';
+            }
+            $minH = self::MIN_HEIGHT_CM[$pkg->symbol->value] ?? null;
+            if ($minH !== null && $pkg->heightCm !== null && $pkg->heightCm < $minH) {
+                $errors[] = "packages[{$i}]: heightCm {$pkg->heightCm} is below the minimum "
+                          . "{$minH} cm for {$pkg->symbol->value} packages.";
             }
         }
 
