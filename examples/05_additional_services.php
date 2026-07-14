@@ -15,6 +15,8 @@
  *   PalletTruckService          StdPaleciak                        B2B & B2C
  *   SmsNotificationService      StdAwizacjaSms                     B2C, DOMESTIC ONLY
  *   InsideDeliveryService       StdWniesienie2                     B2C, DOMESTIC ONLY
+ *   DocumentReturnDomesticService       StdDokumentyZwrotneINiezwrotneGrid2  DOMESTIC ONLY
+ *   DocumentReturnInternationalService  StdDokumentyZwrotneINiezwrotneGrid3  INTERNATIONAL ONLY
  *
  * Gotchas enforced by SUUS:
  *   - SMS pre-advice requires the receiver's mobilePhone (PRJ00355).
@@ -42,6 +44,7 @@ use VeryCodeCom\Suus\Dto\ShipmentOrder;
 use VeryCodeCom\Suus\Enum\OrderType;
 use VeryCodeCom\Suus\Enum\PackageSymbol;
 use VeryCodeCom\Suus\Service\CodService;
+use VeryCodeCom\Suus\Service\DocumentReturnDomesticService;
 use VeryCodeCom\Suus\Service\EmailNotificationService;
 use VeryCodeCom\Suus\Service\InsideDeliveryService;
 use VeryCodeCom\Suus\Service\InsuranceService;
@@ -106,6 +109,15 @@ $order = new ShipmentOrder(
         new LiftService(),          // tail-lift (<= 750 kg) at delivery
         new PalletTruckService(),   // pallet truck at delivery
         new InsideDeliveryService(),// carry goods inside. B2C domestic only.
+
+        // Return of documents to sender (KR) - DOMESTIC only. On an international
+        // order use DocumentReturnInternationalService (GG) instead.
+        new DocumentReturnDomesticService(
+            documentNumber: 'FV/2026/07/001',
+            tag:            DocumentReturnDomesticService::TAG_RETURN,      // DZ (or TAG_ACCOMPANYING = DT)
+            documentType:   DocumentReturnDomesticService::DOC_INVOICE,    // FK (or WZ / ZLEC / SPEC)
+            description:    'Zwrot podpisanej faktury',
+        ),
     ],
 );
 

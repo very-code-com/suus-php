@@ -37,15 +37,15 @@ final class FieldLengthAndDeliveryPointTest extends TestCase
         $order  = $this->makeOrder(reference: str_repeat('X', 51));
         $errors = $this->validator->validate($order);
         $this->assertNotEmpty($errors);
-        $this->assertStringContainsString('reference', $errors[0]);
-        $this->assertStringContainsString('50', $errors[0]);
+        $this->assertStringContainsString('reference', (string) $errors[0]);
+        $this->assertStringContainsString('50', (string) $errors[0]);
     }
 
     public function testReferenceExactly50CharsIsValid(): void
     {
         $order  = $this->makeOrder(reference: str_repeat('X', 50));
         $errors = $this->validator->validate($order);
-        $this->assertEmpty(array_filter($errors, fn($e) => str_contains($e, 'reference')));
+        $this->assertEmpty(array_filter($errors, fn($e) => str_contains((string) $e, 'reference')));
     }
 
     // -- Sender address field lengths ----------------------------------
@@ -101,7 +101,7 @@ final class FieldLengthAndDeliveryPointTest extends TestCase
         $order  = $this->makeOrder();
         $errors = $this->validator->validate($order);
         // Filter out unrelated errors (e.g., loading date too soon for today)
-        $lengthErrors = array_filter($errors, fn($e) => str_contains($e, 'exceeds'));
+        $lengthErrors = array_filter($errors, fn($e) => str_contains((string) $e, 'exceeds'));
         $this->assertEmpty($lengthErrors);
     }
 
@@ -287,11 +287,12 @@ final class FieldLengthAndDeliveryPointTest extends TestCase
         );
     }
 
-    /** @param string[] $errors */
+    /** @param \VeryCodeCom\Suus\Validation\ValidationError[] $errors */
     private function assertContainsErrorAbout(array $errors, string $field, string $limit): void
     {
-        $matching = array_filter($errors, fn($e) => str_contains($e, $field));
-        $this->assertNotEmpty($matching, "Expected an error about '{$field}' but got: " . implode(', ', $errors));
+        $messages = array_map('strval', $errors);
+        $matching = array_filter($messages, fn($e) => str_contains($e, $field));
+        $this->assertNotEmpty($matching, "Expected an error about '{$field}' but got: " . implode(', ', $messages));
         $matching = array_filter($matching, fn($e) => str_contains($e, $limit));
         $this->assertNotEmpty($matching, "Expected '{$limit}' in error for '{$field}'.");
     }

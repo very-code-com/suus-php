@@ -4,26 +4,56 @@ declare(strict_types=1);
 
 namespace VeryCodeCom\Suus\Exception;
 
+use VeryCodeCom\Suus\Validation\ValidationError;
+
 /**
  * Thrown when local validation of a ShipmentOrder fails before the API call.
- * Contains a list of all validation violations found.
+ * Contains all validation violations found.
+ *
+ * Since 1.2.0 violations are structured {@see ValidationError} objects (code +
+ * field + message). {@see self::getErrors()} still returns plain message strings
+ * for backward compatibility; {@see self::getValidationErrors()} exposes the
+ * typed objects. Bare strings passed to the constructor are wrapped transparently.
  */
 class SuusValidationException extends SuusException
 {
-    /** @param string[] $errors */
+    /** @var ValidationError[] */
+    public readonly array $errors;
+
+    /** @param array<ValidationError|string> $errors */
     public function __construct(
-        public readonly array $errors,
+        array $errors,
         ?\Throwable $previous = null,
     ) {
+        $normalised = array_map(
+            static fn (ValidationError|string $e): ValidationError => $e instanceof ValidationError ? $e : new ValidationError($e),
+            array_values($errors),
+        );
+        $this->errors = $normalised;
+
         parent::__construct(
-            'Shipment validation failed: ' . implode('; ', $errors),
+            'Shipment validation failed: ' . implode('; ', array_map(static fn (ValidationError $e): string => $e->message, $normalised)),
             0,
             $previous,
         );
     }
 
-    /** @return string[] */
+    /**
+     * Plain human-readable messages (backward-compatible).
+     *
+     * @return string[]
+     */
     public function getErrors(): array
+    {
+        return array_map(static fn (ValidationError $e): string => $e->message, $this->errors);
+    }
+
+    /**
+     * Structured validation errors (code + field + message).
+     *
+     * @return ValidationError[]
+     */
+    public function getValidationErrors(): array
     {
         return $this->errors;
     }

@@ -67,7 +67,7 @@ final class ShipmentValidatorTest extends TestCase
         $errors = $this->validator->validate($this->makeOrder(['orderType' => OrderType::B2C]));
 
         $this->assertTrue(
-            (bool) array_filter($errors, fn($e) => str_contains($e, 'B2B')),
+            (bool) array_filter($errors, fn($e) => str_contains((string) $e, 'B2B')),
             'Expected a B2B-only error, got: ' . implode('; ', $errors),
         );
     }
@@ -77,7 +77,7 @@ final class ShipmentValidatorTest extends TestCase
         $errors = $this->validator->validate($this->makeOrder(['freight' => '100.00']));
 
         $this->assertTrue(
-            (bool) array_filter($errors, fn($e) => str_contains($e, 'freight and currency')),
+            (bool) array_filter($errors, fn($e) => str_contains((string) $e, 'freight and currency')),
             'Expected a freight/currency pairing error, got: ' . implode('; ', $errors),
         );
     }
@@ -87,7 +87,7 @@ final class ShipmentValidatorTest extends TestCase
         $errors = $this->validator->validate($this->makeOrder(['currency' => 'EUR']));
 
         $this->assertTrue(
-            (bool) array_filter($errors, fn($e) => str_contains($e, 'freight and currency')),
+            (bool) array_filter($errors, fn($e) => str_contains((string) $e, 'freight and currency')),
             'Expected a freight/currency pairing error, got: ' . implode('; ', $errors),
         );
     }
@@ -109,7 +109,7 @@ final class ShipmentValidatorTest extends TestCase
         ]));
 
         $this->assertTrue(
-            (bool) array_filter($errors, fn($e) => str_contains($e, 'currency')),
+            (bool) array_filter($errors, fn($e) => str_contains((string) $e, 'currency')),
             'Expected a currency length error, got: ' . implode('; ', $errors),
         );
     }
@@ -123,7 +123,7 @@ final class ShipmentValidatorTest extends TestCase
         ]));
 
         $this->assertTrue(
-            (bool) array_filter($errors, fn($e) => str_contains($e, 'costGroup')),
+            (bool) array_filter($errors, fn($e) => str_contains((string) $e, 'costGroup')),
             'Expected a costGroup length error, got: ' . implode('; ', $errors),
         );
     }
@@ -138,7 +138,7 @@ final class ShipmentValidatorTest extends TestCase
 
         $this->assertNotEmpty($errors);
         $this->assertTrue(
-            (bool) array_filter($errors, fn($e) => str_contains(strtolower($e), 'incoterms')),
+            (bool) array_filter($errors, fn($e) => str_contains(strtolower((string) $e), 'incoterms')),
             'Expected an incoterms error, got: ' . implode('; ', $errors),
         );
     }
@@ -176,7 +176,7 @@ final class ShipmentValidatorTest extends TestCase
 
         $this->assertNotEmpty($errors);
         $this->assertTrue(
-            (bool) array_filter($errors, fn($e) => str_contains($e, '124') || str_contains(strtolower($e), 'package')),
+            (bool) array_filter($errors, fn($e) => str_contains((string) $e, '124') || str_contains(strtolower((string) $e), 'package')),
             'Expected a package count error, got: ' . implode('; ', $errors),
         );
     }
@@ -207,7 +207,7 @@ final class ShipmentValidatorTest extends TestCase
 
         $this->assertNotEmpty($errors);
         $this->assertTrue(
-            (bool) array_filter($errors, fn($e) => str_contains($e, 'weightKg') || str_contains($e, '126')),
+            (bool) array_filter($errors, fn($e) => str_contains((string) $e, 'weightKg') || str_contains((string) $e, '126')),
             'Expected a per-package weight error, got: ' . implode('; ', $errors),
         );
     }
@@ -216,7 +216,7 @@ final class ShipmentValidatorTest extends TestCase
     {
         $packages = [new Package(PackageSymbol::KAR, weightKg: 126.0)];
         $errors   = $this->validator->validate($this->makeOrder(['packages' => $packages]));
-        $weightErrors = array_filter($errors, fn($e) => str_contains($e, 'weightKg'));
+        $weightErrors = array_filter($errors, fn($e) => str_contains((string) $e, 'weightKg'));
         $this->assertEmpty($weightErrors, implode('; ', $errors));
     }
 
@@ -228,7 +228,7 @@ final class ShipmentValidatorTest extends TestCase
 
         $this->assertNotEmpty($errors);
         $this->assertTrue(
-            (bool) array_filter($errors, fn($e) => str_contains($e, 'Total weight') || str_contains($e, '800')),
+            (bool) array_filter($errors, fn($e) => str_contains((string) $e, 'Total weight') || str_contains((string) $e, '800')),
             'Expected a total weight error, got: ' . implode('; ', $errors),
         );
     }
@@ -243,7 +243,7 @@ final class ShipmentValidatorTest extends TestCase
         $errors   = $this->validator->validate($this->makeOrder(['packages' => $packages]));
 
         $this->assertTrue(
-            (bool) array_filter($errors, fn($e) => str_contains($e, 'lengthCm') || str_contains($e, '240')),
+            (bool) array_filter($errors, fn($e) => str_contains((string) $e, 'lengthCm') || str_contains((string) $e, '240')),
             'Expected a lengthCm error, got: ' . implode('; ', $errors),
         );
     }
@@ -254,7 +254,7 @@ final class ShipmentValidatorTest extends TestCase
         $errors   = $this->validator->validate($this->makeOrder(['packages' => $packages]));
 
         $this->assertTrue(
-            (bool) array_filter($errors, fn($e) => str_contains($e, 'widthCm') || str_contains($e, '120')),
+            (bool) array_filter($errors, fn($e) => str_contains((string) $e, 'widthCm') || str_contains((string) $e, '120')),
             'Expected a widthCm error, got: ' . implode('; ', $errors),
         );
     }
@@ -265,7 +265,7 @@ final class ShipmentValidatorTest extends TestCase
         $errors   = $this->validator->validate($this->makeOrder(['packages' => $packages]));
 
         $this->assertTrue(
-            (bool) array_filter($errors, fn($e) => str_contains($e, 'heightCm') || str_contains($e, '220')),
+            (bool) array_filter($errors, fn($e) => str_contains((string) $e, 'heightCm') || str_contains((string) $e, '220')),
             'Expected a heightCm error, got: ' . implode('; ', $errors),
         );
     }
@@ -274,7 +274,7 @@ final class ShipmentValidatorTest extends TestCase
     {
         $packages = [new Package(PackageSymbol::KAR, weightKg: 10.0, lengthCm: 240.0, widthCm: 120.0, heightCm: 220.0)];
         $errors   = $this->validator->validate($this->makeOrder(['packages' => $packages]));
-        $dimErrors = array_filter($errors, fn($e) => str_contains($e, 'Cm'));
+        $dimErrors = array_filter($errors, fn($e) => str_contains((string) $e, 'Cm'));
         $this->assertEmpty($dimErrors, implode('; ', $errors));
     }
 
@@ -283,7 +283,7 @@ final class ShipmentValidatorTest extends TestCase
         // Dimensions are optional - null should produce no dimension errors.
         $packages = [new Package(PackageSymbol::KAR, weightKg: 10.0)];
         $errors   = $this->validator->validate($this->makeOrder(['packages' => $packages]));
-        $dimErrors = array_filter($errors, fn($e) => str_contains($e, 'Cm'));
+        $dimErrors = array_filter($errors, fn($e) => str_contains((string) $e, 'Cm'));
         $this->assertEmpty($dimErrors, implode('; ', $errors));
     }
 
@@ -293,7 +293,7 @@ final class ShipmentValidatorTest extends TestCase
         $errors   = $this->validator->validate($this->makeOrder(['packages' => $packages]));
 
         $this->assertTrue(
-            (bool) array_filter($errors, fn($e) => str_contains($e, 'heightCm') && str_contains($e, 'EUR')),
+            (bool) array_filter($errors, fn($e) => str_contains((string) $e, 'heightCm') && str_contains((string) $e, 'EUR')),
             'Expected a min-height error for EUR, got: ' . implode('; ', $errors),
         );
     }
@@ -302,7 +302,7 @@ final class ShipmentValidatorTest extends TestCase
     {
         $packages = [new Package(PackageSymbol::EUR, weightKg: 50.0, lengthCm: 120.0, widthCm: 80.0, heightCm: 20.0)];
         $errors   = $this->validator->validate($this->makeOrder(['packages' => $packages]));
-        $dimErrors = array_filter($errors, fn($e) => str_contains($e, 'Cm'));
+        $dimErrors = array_filter($errors, fn($e) => str_contains((string) $e, 'Cm'));
         $this->assertEmpty($dimErrors, implode('; ', $errors));
     }
 
@@ -317,7 +317,7 @@ final class ShipmentValidatorTest extends TestCase
             'loadingDate' => new \DateTimeImmutable('2025-06-07'),
         ]));
         $this->assertTrue(
-            (bool) array_filter($errors, fn($e) => str_contains(strtolower($e), 'business day')),
+            (bool) array_filter($errors, fn($e) => str_contains(strtolower((string) $e), 'business day')),
             'Expected a business day error, got: ' . implode('; ', $errors),
         );
     }
@@ -327,7 +327,7 @@ final class ShipmentValidatorTest extends TestCase
         // null means auto-computed, skip validation
         $order  = $this->makeOrder(['loadingDate' => null]);
         $errors = $this->validator->validate($order);
-        $dateErrors = array_filter($errors, fn($e) => str_contains($e, 'loadingDate'));
+        $dateErrors = array_filter($errors, fn($e) => str_contains((string) $e, 'loadingDate'));
         $this->assertEmpty($dateErrors, implode('; ', $errors));
     }
 
@@ -349,7 +349,7 @@ final class ShipmentValidatorTest extends TestCase
 
         $errors = $this->validator->validate($order);
         $this->assertTrue(
-            (bool) array_filter($errors, fn($e) => str_contains($e, 'mobilePhone') && str_contains($e, '30')),
+            (bool) array_filter($errors, fn($e) => str_contains((string) $e, 'mobilePhone') && str_contains((string) $e, '30')),
             'Expected a mobilePhone length error, got: ' . implode('; ', $errors),
         );
     }

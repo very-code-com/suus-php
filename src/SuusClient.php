@@ -24,6 +24,10 @@ use VeryCodeCom\Suus\Internal\Soap\ParsedResponse;
 use VeryCodeCom\Suus\Internal\Soap\ResponseParser;
 use VeryCodeCom\Suus\Internal\Soap\SoapEnvelopeBuilder;
 use VeryCodeCom\Suus\Internal\Validator\ShipmentValidator;
+use VeryCodeCom\Suus\Routing\DefaultRouteClassifier;
+use VeryCodeCom\Suus\Routing\RouteClassifierInterface;
+use VeryCodeCom\Suus\Validation\ValidationError;
+use VeryCodeCom\Suus\Validation\ValidationPolicy;
 use VeryCodeCom\Suus\Transport\CurlTransport;
 use VeryCodeCom\Suus\Transport\TransportInterface;
 use VeryCodeCom\Suus\Transport\TransportRequest;
@@ -57,23 +61,29 @@ use Psr\Log\NullLogger;
  */
 final class SuusClient
 {
-    private readonly SoapEnvelopeBuilder $builder;
-    private readonly ResponseParser      $parser;
-    private readonly StatusMapper        $statusMapper;
-    private readonly ShipmentValidator   $validator;
-    private readonly LoggerInterface     $logger;
+    private readonly SoapEnvelopeBuilder      $builder;
+    private readonly ResponseParser           $parser;
+    private readonly StatusMapper             $statusMapper;
+    private readonly ShipmentValidator        $validator;
+    private readonly LoggerInterface          $logger;
+    private readonly ValidationPolicy         $policy;
+    private readonly RouteClassifierInterface $routeClassifier;
 
     public function __construct(
         private readonly SuusConfig                $config,
         private readonly TransportInterface        $transport = new CurlTransport(),
         ?LoggerInterface                            $logger = null,
         private readonly ?BusinessCalendarInterface $calendar = null,
+        ?ValidationPolicy                           $policy = null,
+        ?RouteClassifierInterface                   $routeClassifier = null,
     ) {
-        $this->builder      = new SoapEnvelopeBuilder($config);
-        $this->parser       = new ResponseParser();
-        $this->statusMapper = new StatusMapper();
-        $this->validator    = new ShipmentValidator();
-        $this->logger       = $logger ?? new NullLogger();
+        $this->policy          = $policy ?? ValidationPolicy::strict();
+        $this->routeClassifier = $routeClassifier ?? new DefaultRouteClassifier();
+        $this->builder         = new SoapEnvelopeBuilder($config, $this->routeClassifier);
+        $this->parser          = new ResponseParser();
+        $this->statusMapper    = new StatusMapper();
+        $this->validator       = new ShipmentValidator();
+        $this->logger          = $logger ?? new NullLogger();
     }
 
     // -----------------------------------------------------------------
@@ -95,6 +105,28 @@ final class SuusClient
     // -----------------------------------------------------------------
 
     /**
+     * Pre-flight validation: run the same local business-rule checks as
+     * createShipment() WITHOUT making any network call. Useful for surfacing
+     * validation in your own UI before sending the order.
+     *
+     * The sender-country business-day calendar is auto-selected (or the one
+     * injected into this client is used), exactly as createShipment() does, so
+     * you never accidentally validate against the wrong calendar. The configured
+     * ValidationPolicy and RouteClassifier are applied.
+     *
+     * @return ValidationError[] Structured validation errors; empty array = valid.
+     */
+    public function validate(ShipmentOrder $order): array
+    {
+        return $this->validator->validate(
+            $order,
+            calendar:   $this->resolveCalendar($order),
+            policy:     $this->policy,
+            classifier: $this->routeClassifier,
+        );
+    }
+
+    /**
      * Create a shipment (SUUS method: addOrder).
      *
      * Validates the order locally first, then calls addOrder.
@@ -109,10 +141,10 @@ final class SuusClient
      */
     public function createShipment(ShipmentOrder $order): ShipmentResult
     {
-        $calendar = $this->calendar ?? CalendarFactory::forCountry($order->sender->getCountryCode());
+        $calendar = $this->resolveCalendar($order);
 
         // Validate before making any network call
-        $errors = $this->validator->validate($order, calendar: $calendar);
+        $errors = $this->validate($order);
         if (!empty($errors)) {
             $this->fail(new SuusValidationException($errors));
         }
@@ -382,6 +414,12 @@ final class SuusClient
     // -----------------------------------------------------------------
     // Internal transport
     // -----------------------------------------------------------------
+
+    /** Resolve the business-day calendar: injected one wins, else sender-country default. */
+    private function resolveCalendar(ShipmentOrder $order): BusinessCalendarInterface
+    {
+        return $this->calendar ?? CalendarFactory::forCountry($order->sender->getCountryCode());
+    }
 
     /** @throws SuusTransportException|SuusResponseParseException */
     private function call(string $method, string $envelope): ParsedResponse

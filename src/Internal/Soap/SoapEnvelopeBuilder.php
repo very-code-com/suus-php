@@ -8,6 +8,8 @@ use VeryCodeCom\Suus\Dto\Address;
 use VeryCodeCom\Suus\Dto\Package;
 use VeryCodeCom\Suus\Dto\ShipmentOrder;
 use VeryCodeCom\Suus\Enum\DocumentType;
+use VeryCodeCom\Suus\Routing\DefaultRouteClassifier;
+use VeryCodeCom\Suus\Routing\RouteClassifierInterface;
 use VeryCodeCom\Suus\Service\ServiceInterface;
 use VeryCodeCom\Suus\SuusConfig;
 
@@ -29,7 +31,14 @@ use VeryCodeCom\Suus\SuusConfig;
  */
 final class SoapEnvelopeBuilder
 {
-    public function __construct(private readonly SuusConfig $config) {}
+    private readonly RouteClassifierInterface $classifier;
+
+    public function __construct(
+        private readonly SuusConfig $config,
+        ?RouteClassifierInterface $classifier = null,
+    ) {
+        $this->classifier = $classifier ?? new DefaultRouteClassifier();
+    }
 
     // -----------------------------------------------------------------
     // Public builders (one per SUUS method)
@@ -43,7 +52,7 @@ final class SoapEnvelopeBuilder
                 . $this->addressXml($order->sender,   'loadingAddress')
                 . $this->addressXml($order->receiver, 'unloadingAddress');
 
-        if ($order->isInternational()) {
+        if ($this->classifier->isInternational($order)) {
             $body .= $this->addressXml($order->sender,   'shipper');
             $body .= $this->addressXml($order->receiver, 'consignee');
         }
@@ -128,7 +137,7 @@ final class SoapEnvelopeBuilder
         $xml .= '<descriptionOfGoods xsi:type="xsd:string">' . self::xe($desc)                   . '</descriptionOfGoods>';
         $xml .= '<orderType xsi:type="xsd:string">'          . self::xe($order->orderType->value) . '</orderType>';
 
-        if ($order->isInternational() && $order->incoterms !== null) {
+        if ($this->classifier->isInternational($order) && $order->incoterms !== null) {
             $xml .= '<incoterms xsi:type="xsd:string">' . self::xe($order->incoterms->value) . '</incoterms>';
             $xml .= '<category xsi:type="xsd:string">'  . self::xe($order->category->value)  . '</category>';
 

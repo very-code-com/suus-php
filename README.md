@@ -2,7 +2,7 @@
 
 **PHP client library for the SUUS Logistics (Rohlig Logistics) SOAP API.**
 
-The first open-source PHP package for SUUS/Rohlig freight integration - create shipments, track statuses, download documents, and handle multi-country business-day scheduling.
+The first open-source PHP package for SUUS/Rohlig freight integration - create shipments, pre-flight validate orders, track statuses, download documents, and handle multi-country business-day scheduling.
 
 [![Latest Version](https://img.shields.io/packagist/v/very-code-com/suus-php.svg)](https://packagist.org/packages/very-code-com/suus-php)
 [![Total Downloads](https://img.shields.io/packagist/dt/very-code-com/suus-php.svg)](https://packagist.org/packages/very-code-com/suus-php)
@@ -134,6 +134,17 @@ and at least one of `phone` / `mobilePhone`; `contactPerson` and `email` are opt
 
 -> [full example](examples/01_create_shipment.php) | [international routes](examples/02_international_shipment.php) | [additional services](examples/05_additional_services.php)
 
+### `validate(ShipmentOrder $order): ValidationError[]`
+
+Runs the same local business-rule checks as `createShipment()` with **no network
+call**, auto-selecting the sender-country calendar and applying the configured
+`ValidationPolicy` / `RouteClassifier`. Returns typed `ValidationError` objects
+(`message` / `field` / `code`); an empty array means the order is valid. Ideal for
+surfacing validation in your own UI before sending. See
+[Pre-flight Validation, Policies & Route Classification](#pre-flight-validation-policies--route-classification).
+
+-> [full example](examples/08_validation_and_policies.php)
+
 ### `fetchStatus(string $shipmentNo): StatusResult`
 
 Polls events via SUUS `getEvents`.
@@ -223,6 +234,13 @@ maps to a SUUS service symbol and its fields are serialized automatically.
 | `PalletTruckService`         | `StdPaleciak`                   | B2B & B2C               | pallet truck at delivery |
 | `SmsNotificationService`     | `StdAwizacjaSms`                | **B2C, domestic only**  | receiver **mobilePhone required** (`PRJ00355`) |
 | `InsideDeliveryService`      | `StdWniesienie2`                | **B2C, domestic only**  | carry goods inside |
+| `DocumentReturnDomesticService`      | `StdDokumentyZwrotneINiezwrotneGrid2` | **domestic only** | `documentNumber`, `tag` (`DZ`/`DT`), `documentType` (`FK`/`WZ`/`ZLEC`/`SPEC`), `description` |
+| `DocumentReturnInternationalService` | `StdDokumentyZwrotneINiezwrotneGrid3` | **international only** | same fields as the domestic variant |
+
+> **Route-restricted services** are enforced locally: domestic-only services on an
+> international order (and the international-only document-return service on a
+> domestic order) are rejected before the API call. Relax this with
+> `ValidationPolicy` (`enforceServiceRouteRestrictions`).
 
 ```php
 use VeryCodeCom\Suus\Service\{CodService, InsuranceService, EmailNotificationService};
@@ -248,13 +266,19 @@ additionalServices: [
 ## International Routes & Incoterms
 
 A shipment is **international** whenever **either** the sender or the receiver is
-outside Poland. Only `PL->PL` counts as domestic. For every international route:
+outside Poland. Only `PL->PL` counts as domestic. For every international route the
+following are enforced **locally, before the API call** (all confirmed against the
+SUUS WebApi docs, WS PK 1.0):
 
 - `incoterms` is **required** (otherwise SUUS returns `PRJ00313`);
 - `orderType` **must be `B2B`** - B2C is not supported for international routes;
 - `returnable` / `stackable` packaging is **not available** (`PRJ00372` / `PRJ00373`);
 - the domestic-only B2C services (SMS pre-advice, inside delivery) cannot be used;
 - `freight` + `currency` may optionally be declared (both together, per `PRJ00387`).
+
+The international-only rules above (except the always-on `incoterms` and
+`freight`/`currency` checks) can be relaxed or redefined per integrator - see
+[Pre-flight validation & policies](#pre-flight-validation-policies--route-classification).
 
 | Route    | Classified as | Incoterms required |
 |----------|---------------|--------------------|
@@ -282,6 +306,77 @@ $result = $client->createShipment(new ShipmentOrder(
 ```
 
 -> [full example](examples/02_international_shipment.php)
+
+---
+
+## Pre-flight Validation, Policies & Route Classification
+
+### Validate before you send
+
+`SuusClient::validate()` runs the **same** local business-rule checks as
+`createShipment()` but makes **no network call**, auto-selecting the sender-country
+calendar. It returns structured `ValidationError` objects (each is `Stringable`):
+
+```php
+use VeryCodeCom\Suus\Validation\ValidationError;
+
+foreach ($client->validate($order) as $error) {
+    // $error->code   e.g. "PRJ00372"  (reuses the SUUS code where one exists)
+    // $error->field  e.g. "packages[0].returnable"
+    // $error->message / (string) $error  human-readable text
+    echo "[{$error->code}] {$error}\n";
+}
+```
+
+`SuusValidationException::getValidationErrors()` returns the same typed objects;
+`getErrors(): string[]` still returns plain messages.
+
+### Relax the international-only rules (`ValidationPolicy`)
+
+Strict by default. Turn off the international-only enforcement when your contract
+allows it (SUUS still validates server-side):
+
+```php
+use VeryCodeCom\Suus\Validation\ValidationPolicy;
+
+$client = new SuusClient($config, policy: ValidationPolicy::relaxed());
+// or fine-grained:
+$client = new SuusClient($config, policy: new ValidationPolicy(
+    enforceInternationalB2B: false,                     // allow B2C internationally
+    enforceServiceRouteRestrictions: true,              // keep service/route checks
+    enforceInternationalPackagingRestrictions: true,
+));
+```
+
+### Override the domestic/international decision (`RouteClassifierInterface`)
+
+The classifier decides which routes the **library** treats as international. That
+drives both local validation and the generated XML (`<shipper>`/`<consignee>` blocks
++ incoterms emission):
+
+```php
+use VeryCodeCom\Suus\Routing\CallableRouteClassifier;
+
+$client = new SuusClient($config, routeClassifier: new CallableRouteClassifier(
+    fn (ShipmentOrder $o): bool =>
+        ($o->sender->getCountryCode() === 'DE' && $o->receiver->getCountryCode() === 'DE')
+            ? false                    // treat DE->DE as domestic in the library
+            : $o->isInternational(),   // default rule otherwise
+));
+```
+
+> ⚠️ **This is a client-side override, not a SUUS-side one.** SUUS classifies each
+> shipment on its **own** side from the address country codes: any route where either
+> country is not `PL` is an international product, regardless of what the classifier
+> returns. Verified against the sandbox — a `DE->DE` order forced to "domestic" is
+> still rejected (`BTN0002`: *"Kraj … nie jest dostępny dla kontrahenta typu B2C dla
+> produktu Drobnica międzynarodowa … nie określono warunków Incoterms"*). Use this
+> seam only when your SUUS **contract/product** already supports the treatment you are
+> forcing (e.g. a local in-country contract); it cannot create capability the contract
+> does not include. For simply relaxing the local intl-only checks, prefer
+> `ValidationPolicy`.
+
+-> [full example](examples/08_validation_and_policies.php)
 
 ---
 
@@ -332,7 +427,7 @@ All exceptions extend `VeryCodeCom\Suus\Exception\SuusException`.
 
 | Exception                          | Trigger                                                      |
 |------------------------------------|--------------------------------------------------------------|
-| `SuusValidationException`          | Local validation failed (date, incoterms, package limits)    |
+| `SuusValidationException`          | Local validation failed - carries typed `getValidationErrors(): ValidationError[]` (code + field + message) and `getErrors(): string[]` (plain messages) |
 | `SuusAuthException`                | SUUS rejects credentials (`DRG00001`)                        |
 | `SuusDuplicateReferenceException`  | Reference already exists (`PRJ00310`)                        |
 | `SuusApiException`                 | Other SUUS API errors - carries `returnCode` + `errorCodes`; the message also includes SUUS's `returnDesc` for bare codes (e.g. `BTN0001` = service temporarily unavailable) |
@@ -341,7 +436,9 @@ All exceptions extend `VeryCodeCom\Suus\Exception\SuusException`.
 
 Every exception extends `SuusException` and exposes `getRawResponse(): ?string`
 (the exact XML SUUS returned, when captured) and `getDebugReport(): string`
-(message + raw response + stack trace) - see [Debug mode](#debug-mode).
+(message + raw response + stack trace) - see [Debug mode](#debug-mode). To validate
+an order **before** sending (and avoid the exception entirely), use
+[`SuusClient::validate()`](#validateshipmentorder-order-validationerror).
 
 ---
 

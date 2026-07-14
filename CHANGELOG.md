@@ -11,6 +11,60 @@ This project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0.htm
 
 ---
 
+## [1.2.0] - 2026-07-17
+
+### Added
+
+- **`SuusClient::validate(ShipmentOrder): ValidationError[]`** - public pre-flight
+  validation that runs the exact checks `createShipment()` performs, without any
+  network call, and auto-selects the sender-country business-day calendar. Lets you
+  surface validation in your own UI without reaching into `@internal` classes.
+- **Typed validation errors** - `VeryCodeCom\Suus\Validation\ValidationError`
+  (`message` + `field` + `code`, `Stringable`) and `ValidationCode` (stable codes,
+  reusing the exact SUUS codes from the WebApi docs where one exists, e.g.
+  `PRJ00372`/`PRJ00373`/`PRJ00351`). `SuusValidationException::getValidationErrors()`
+  returns them; `getErrors(): string[]` is unchanged.
+- **`ValidationPolicy`** (`VeryCodeCom\Suus\Validation`) - injectable into
+  `SuusClient` (`policy:` arg). Toggles the route-shaped rules
+  (`enforceInternationalB2B`, `enforceServiceRouteRestrictions`,
+  `enforceInternationalPackagingRestrictions`). `ValidationPolicy::strict()` is the
+  default; `ValidationPolicy::relaxed()` turns them all off. SUUS still validates
+  server-side.
+- **`RouteClassifierInterface`** (`VeryCodeCom\Suus\Routing`) with
+  `DefaultRouteClassifier` and `CallableRouteClassifier` - injectable into
+  `SuusClient` (`routeClassifier:` arg) to redefine which routes the **library**
+  treats as international. Drives BOTH validation AND the generated XML (`<shipper>`/
+  `<consignee>` blocks + incoterms emission). Note: this is a client-side override -
+  SUUS still classifies each shipment server-side from the address country codes, so
+  it cannot make SUUS treat a non-`PL` route as domestic (verified against the
+  sandbox); use it only when your SUUS contract/product already supports the forced
+  treatment.
+- Route-restricted rules are now enforced **locally** (previously only SUUS rejected
+  them server-side), all policy-toggleable, and confirmed against the SUUS WebApi
+  documentation (WS PK 1.0):
+  - international orders reject domestic-only services (`StdAwizacjaSms`,
+    `StdWniesienie2`, `StdDokumentyZwrotneINiezwrotneGrid2`) and returnable/stackable
+    packaging (`PRJ00372` / `PRJ00373`);
+  - domestic orders reject the international-only document-return service
+    (`StdDokumentyZwrotneINiezwrotneGrid3`).
+- New typed services `DocumentReturnDomesticService`
+  (`StdDokumentyZwrotneINiezwrotneGrid2`, domestic only) and
+  `DocumentReturnInternationalService` (`StdDokumentyZwrotneINiezwrotneGrid3`,
+  international only), sharing `AbstractDocumentReturnService` with `TAG_*` / `DOC_*`
+  constants.
+- `examples/08_validation_and_policies.php` demonstrating all three features.
+
+### Changed
+
+- `ShipmentValidator::validate()` (`@internal`) now returns `ValidationError[]`
+  instead of `string[]`, and accepts optional `ValidationPolicy` / `RouteClassifier`
+  arguments.
+- `SuusValidationException::$errors` is now `ValidationError[]` (each is
+  `Stringable`); bare strings passed to the constructor are wrapped automatically,
+  so existing `getErrors()` / message usage keeps working.
+
+---
+
 ## [1.1.0] - 2026-07-14
 
 ### Added
@@ -79,7 +133,8 @@ This project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0.htm
 - Uses raw cURL + manually built SOAP envelopes (PHP's SoapClient fails for this WSDL)
 - Documents the SUUS response namespace quirk (xmlns:cw / xmlns:ns1 reversal)
 
-[Unreleased]: https://github.com/very-code-com/suus-php/compare/v1.1.0...HEAD
+[Unreleased]: https://github.com/very-code-com/suus-php/compare/v1.2.0...HEAD
+[1.2.0]: https://github.com/very-code-com/suus-php/compare/v1.1.0...v1.2.0
 [1.1.0]: https://github.com/very-code-com/suus-php/compare/v1.0.1...v1.1.0
 [1.0.1]: https://github.com/very-code-com/suus-php/compare/v1.0.0...v1.0.1
 [1.0.0]: https://github.com/very-code-com/suus-php/releases/tag/v1.0.0
