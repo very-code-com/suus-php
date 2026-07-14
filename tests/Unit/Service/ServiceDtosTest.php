@@ -15,7 +15,7 @@ use PHPUnit\Framework\TestCase;
 
 final class ServiceDtosTest extends TestCase
 {
-    // ── CodService ─────────────────────────────────────────────────────
+    // -- CodService -----------------------------------------------------
 
     public function testCodServiceSymbol(): void
     {
@@ -51,7 +51,7 @@ final class ServiceDtosTest extends TestCase
         new CodService(15_001.0);
     }
 
-    // ── InsuranceService ───────────────────────────────────────────────
+    // -- InsuranceService -----------------------------------------------
 
     public function testInsuranceServiceSymbol(): void
     {
@@ -70,14 +70,15 @@ final class ServiceDtosTest extends TestCase
         $this->assertSame(InsuranceService::GOODS_STANDARD, $fields['varchar2']);
         $this->assertFalse($fields['bool1']);
         $this->assertFalse($fields['bool2']);
-        $this->assertArrayNotHasKey('int01', $fields);
+        // Mandatory "goods not excluded" declaration is emitted by default (int01=1).
+        $this->assertSame('1', $fields['int01']);
     }
 
-    public function testInsuranceServiceGoodsDeclarationIncluded(): void
+    public function testInsuranceServiceDeclarationCanBeDisabled(): void
     {
-        $svc    = new InsuranceService(500.0, goodsDeclaration: 'DECL-999');
+        $svc    = new InsuranceService(500.0, confirmGoodsNotExcluded: false);
         $fields = $svc->getSoapFields();
-        $this->assertSame('DECL-999', $fields['int01']);
+        $this->assertArrayNotHasKey('int01', $fields);
     }
 
     public function testInsuranceServiceRejectsZeroAmount(): void
@@ -93,7 +94,7 @@ final class ServiceDtosTest extends TestCase
         new InsuranceService(100.0, goodsType: 'INVALID');
     }
 
-    // ── SmsNotificationService ─────────────────────────────────────────
+    // -- SmsNotificationService -----------------------------------------
 
     public function testSmsNotificationServiceSymbol(): void
     {
@@ -107,7 +108,7 @@ final class ServiceDtosTest extends TestCase
         $this->assertEmpty($svc->getSoapFields());
     }
 
-    // ── EmailNotificationService ───────────────────────────────────────
+    // -- EmailNotificationService ---------------------------------------
 
     public function testEmailNotificationServiceSymbol(): void
     {
@@ -139,7 +140,7 @@ final class ServiceDtosTest extends TestCase
         $this->assertArrayHasKey('varchar2',    $fields);
     }
 
-    // ── LiftService ────────────────────────────────────────────────────
+    // -- LiftService ----------------------------------------------------
 
     public function testLiftServiceSymbol(): void
     {
@@ -153,7 +154,7 @@ final class ServiceDtosTest extends TestCase
         $this->assertTrue($svc->getSoapFields()['bool1']);
     }
 
-    // ── InsideDeliveryService ──────────────────────────────────────────
+    // -- InsideDeliveryService ------------------------------------------
 
     public function testInsideDeliveryServiceSymbol(): void
     {
@@ -167,7 +168,7 @@ final class ServiceDtosTest extends TestCase
         $this->assertEmpty($svc->getSoapFields());
     }
 
-    // ── PalletTruckService ─────────────────────────────────────────────
+    // -- PalletTruckService ---------------------------------------------
 
     public function testPalletTruckServiceSymbol(): void
     {

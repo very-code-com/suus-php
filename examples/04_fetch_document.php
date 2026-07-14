@@ -1,9 +1,25 @@
 <?php
 
 /**
- * Example: Download a shipping label as PDF.
- * Note: getDocument always fails in sandbox mode.
- * Run: SUUS_ENV=production php examples/04_fetch_document.php OPLKRI2600895
+ * Example 04 - Download shipment documents and per-package (colli) numbers.
+ * ---------------------------------------------------------------------------
+ * `fetchDocument()` calls SUUS `getDocument` and returns the raw PDF bytes for
+ * one of four document types:
+ *
+ *   DocumentType::Label         -> standard A4 shipping label
+ *   DocumentType::LabelA6       -> A6 thermal-printer label (Zebra etc.)
+ *   DocumentType::ShippingOrder -> shipping order (list przewozowy)
+ *   DocumentType::LoadingList   -> consolidated loading list
+ *
+ * `fetchLabel()` is a shortcut for fetchDocument(..., DocumentType::Label).
+ * `getColliNumbers()` returns the per-package tracking numbers you need to
+ * request individual colli labels.
+ *
+ * NOTE: in the sandbox, getDocument / getColliNo always fail (PRJ000001) - run
+ * this against PRODUCTION with a real shipment number.
+ *
+ * Run:
+ *   SUUS_LOGIN=ws_xxx SUUS_PASSWORD=xxx php examples/04_fetch_document.php OPLKRI2600895
  */
 
 declare(strict_types=1);
@@ -20,24 +36,41 @@ $client = SuusClient::production(
 );
 
 $shipmentNo = $argv[1] ?? 'OPLKRI2600895';
+$outDir     = sys_get_temp_dir();
+
+/**
+ * Small helper: fetch a document type and write it to disk.
+ */
+$download = static function (SuusClient $client, string $shipmentNo, DocumentType $type, string $outDir): void {
+    $pdf  = $client->fetchDocument($shipmentNo, $type);
+    $path = sprintf('%s/%s_%s.pdf', $outDir, $type->value, $shipmentNo);
+    file_put_contents($path, $pdf);
+    printf("  %-14s -> %s (%d bytes)\n", $type->value, $path, strlen($pdf));
+};
 
 try {
-    // Download A4 label (default)
-    $pdf = $client->fetchLabel($shipmentNo);
-    $path = "/tmp/label_{$shipmentNo}.pdf";
-    file_put_contents($path, $pdf);
-    echo "Label saved to {$path} (" . strlen($pdf) . " bytes)\n";
+    echo "Downloading documents for {$shipmentNo}:\n";
 
-    // Download A6 thermal label
-    $pdfA6 = $client->fetchDocument($shipmentNo, DocumentType::LabelA6);
-    $pathA6 = "/tmp/label_a6_{$shipmentNo}.pdf";
-    file_put_contents($pathA6, $pdfA6);
-    echo "A6 label saved to {$pathA6}\n";
+    // The standard A4 label via the convenience shortcut ...
+    $label = $client->fetchLabel($shipmentNo);
+    $labelPath = "{$outDir}/label_{$shipmentNo}.pdf";
+    file_put_contents($labelPath, $label);
+    printf("  %-14s -> %s (%d bytes)\n", 'label', $labelPath, strlen($label));
 
-    // Download shipping order
-    $shippingOrder = $client->fetchDocument($shipmentNo, DocumentType::ShippingOrder);
-    file_put_contents("/tmp/shipping_order_{$shipmentNo}.pdf", $shippingOrder);
-    echo "Shipping order saved.\n";
+    // ... and the other document types explicitly.
+    $download($client, $shipmentNo, DocumentType::LabelA6, $outDir);
+    $download($client, $shipmentNo, DocumentType::ShippingOrder, $outDir);
+    $download($client, $shipmentNo, DocumentType::LoadingList, $outDir);
+
+    // Per-package tracking numbers (colli).
+    echo "\nColli (per-package) numbers:\n";
+    $colli = $client->getColliNumbers($shipmentNo);
+    if ($colli === []) {
+        echo "  (none returned)\n";
+    }
+    foreach ($colli as $i => $number) {
+        printf("  #%d %s\n", $i + 1, $number);
+    }
 } catch (SuusException $e) {
     echo "SUUS error: {$e->getMessage()}\n";
 }

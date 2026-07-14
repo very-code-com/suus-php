@@ -28,20 +28,20 @@ final class StatusMapperTest extends TestCase
     public static function knownCodeProvider(): array
     {
         return [
-            'J_CR → Created'   => ['J_CR',  ShipmentStatus::Created],
-            'KOL → Created'    => ['KOL',   ShipmentStatus::Created],
-            'M_KOL → Created'  => ['M_KOL', ShipmentStatus::Created],
-            'LOAD → InTransit' => ['LOAD',  ShipmentStatus::InTransit],
-            'ZALF → InTransit' => ['ZALF',  ShipmentStatus::InTransit],
-            'ZAL → InTransit'  => ['ZAL',   ShipmentStatus::InTransit],
-            'M_DYS → InTransit'=> ['M_DYS', ShipmentStatus::InTransit],
-            'WTRF → InTransit' => ['WTRF',  ShipmentStatus::InTransit],
-            'ROZF → Delivered' => ['ROZF',  ShipmentStatus::Delivered],
-            'UNDI → Delivered' => ['UNDI',  ShipmentStatus::Delivered],
-            'UNLO → Delivered' => ['UNLO',  ShipmentStatus::Delivered],
-            'ANUL → Cancelled' => ['ANUL',  ShipmentStatus::Cancelled],
-            'ZWRON → Failed'   => ['ZWRON', ShipmentStatus::Failed],
-            'ZTF → Failed'     => ['ZTF',   ShipmentStatus::Failed],
+            'J_CR -> Created'   => ['J_CR',  ShipmentStatus::Created],
+            'KOL -> Created'    => ['KOL',   ShipmentStatus::Created],
+            'M_KOL -> Created'  => ['M_KOL', ShipmentStatus::Created],
+            'LOAD -> InTransit' => ['LOAD',  ShipmentStatus::InTransit],
+            'ZALF -> InTransit' => ['ZALF',  ShipmentStatus::InTransit],
+            'ZAL -> InTransit'  => ['ZAL',   ShipmentStatus::InTransit],
+            'M_DYS -> InTransit'=> ['M_DYS', ShipmentStatus::InTransit],
+            'WTRF -> InTransit' => ['WTRF',  ShipmentStatus::InTransit],
+            'ROZF -> Delivered' => ['ROZF',  ShipmentStatus::Delivered],
+            'UNDI -> Delivered' => ['UNDI',  ShipmentStatus::Delivered],
+            'UNLO -> Delivered' => ['UNLO',  ShipmentStatus::Delivered],
+            'ANUL -> Cancelled' => ['ANUL',  ShipmentStatus::Cancelled],
+            'ZWRON -> Failed'   => ['ZWRON', ShipmentStatus::Failed],
+            'ZTF -> Failed'     => ['ZTF',   ShipmentStatus::Failed],
         ];
     }
 

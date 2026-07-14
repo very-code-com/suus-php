@@ -28,7 +28,7 @@ use VeryCodeCom\Suus\Calendar\SwitzerlandCalendar;
  */
 final class EuropeanCalendarTest extends TestCase
 {
-    // ─────────────────────────── GermanCalendar ───────────────────────────
+    // --------------------------- GermanCalendar ---------------------------
 
     public function testGermanNewYearIsHoliday(): void
     {
@@ -101,7 +101,7 @@ final class EuropeanCalendarTest extends TestCase
         $this->assertSame('2025-04-23', $result->format('Y-m-d'));
     }
 
-    // ─────────────────────────── AustriaCalendar ──────────────────────────
+    // --------------------------- AustriaCalendar --------------------------
 
     public function testAustrianNationalDayIsHoliday(): void
     {
@@ -134,7 +134,7 @@ final class EuropeanCalendarTest extends TestCase
         $this->assertFalse((new AustriaCalendar())->isBusinessDay(new DateTimeImmutable('2025-04-21')));
     }
 
-    // ─────────────────────────── SwitzerlandCalendar ─────────────────────
+    // --------------------------- SwitzerlandCalendar ---------------------
 
     public function testSwissNationalDayIsHoliday(): void
     {
@@ -167,7 +167,7 @@ final class EuropeanCalendarTest extends TestCase
         $this->assertFalse((new SwitzerlandCalendar())->isBusinessDay(new DateTimeImmutable('2025-06-09')));
     }
 
-    // ─────────────────────────── CzechCalendar ────────────────────────────
+    // --------------------------- CzechCalendar ----------------------------
 
     public function testCzechGoodFridayIsHoliday(): void
     {
@@ -199,7 +199,7 @@ final class EuropeanCalendarTest extends TestCase
         $this->assertFalse((new CzechCalendar())->isBusinessDay(new DateTimeImmutable('2025-11-17')));
     }
 
-    // ─────────────────────────── SlovakCalendar ───────────────────────────
+    // --------------------------- SlovakCalendar ---------------------------
 
     public function testSlovakEpiphanyIsHoliday(): void
     {
@@ -236,7 +236,7 @@ final class EuropeanCalendarTest extends TestCase
         $this->assertFalse((new SlovakCalendar())->isBusinessDay(new DateTimeImmutable('2025-12-24')));
     }
 
-    // ─────────────────────────── HungarianCalendar ───────────────────────
+    // --------------------------- HungarianCalendar -----------------------
 
     public function testHungarianNationalDayMarch15IsHoliday(): void
     {
@@ -266,7 +266,7 @@ final class EuropeanCalendarTest extends TestCase
         $this->assertFalse((new HungarianCalendar())->isBusinessDay(new DateTimeImmutable('2025-06-09')));
     }
 
-    // ─────────────────────────── RomanianCalendar ────────────────────────
+    // --------------------------- RomanianCalendar ------------------------
 
     public function testRomanianUsesOrthodoxEaster(): void
     {
@@ -308,7 +308,7 @@ final class EuropeanCalendarTest extends TestCase
         $this->assertFalse((new RomanianCalendar())->isBusinessDay(new DateTimeImmutable('2026-11-30')));
     }
 
-    // ─────────────────────────── SlovenianCalendar ───────────────────────
+    // --------------------------- SlovenianCalendar -----------------------
 
     public function testSlovenianPreserenDayIsHoliday(): void
     {
@@ -352,7 +352,7 @@ final class EuropeanCalendarTest extends TestCase
         $this->assertFalse((new SlovenianCalendar())->isBusinessDay(new DateTimeImmutable('2025-06-08')));
     }
 
-    // ─────────────────────────── CalendarFactory ─────────────────────────
+    // --------------------------- CalendarFactory -------------------------
 
     public function testCalendarFactoryReturnsCorrectCalendars(): void
     {
@@ -380,7 +380,7 @@ final class EuropeanCalendarTest extends TestCase
         $this->assertInstanceOf(\VeryCodeCom\Suus\Calendar\PolishCalendar::class, $cal);
     }
 
-    // ─────────────────────────── Cross-country ───────────────────────────
+    // --------------------------- Cross-country ---------------------------
 
     /** @dataProvider countriesProvider */
     #[DataProvider('countriesProvider')]

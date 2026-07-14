@@ -31,9 +31,9 @@ final class SoapEnvelopeBuilder
 {
     public function __construct(private readonly SuusConfig $config) {}
 
-    // ─────────────────────────────────────────────────────────────────
+    // -----------------------------------------------------------------
     // Public builders (one per SUUS method)
-    // ─────────────────────────────────────────────────────────────────
+    // -----------------------------------------------------------------
 
     public function buildAddOrder(ShipmentOrder $order, string $loadingDate, string $unloadingDate): string
     {
@@ -83,9 +83,9 @@ final class SoapEnvelopeBuilder
         return $this->envelope('getDeliveryPoints', '');
     }
 
-    // ─────────────────────────────────────────────────────────────────
+    // -----------------------------------------------------------------
     // Private helpers
-    // ─────────────────────────────────────────────────────────────────
+    // -----------------------------------------------------------------
 
     private function envelope(string $method, string $innerBody): string
     {
@@ -131,6 +131,15 @@ final class SoapEnvelopeBuilder
         if ($order->isInternational() && $order->incoterms !== null) {
             $xml .= '<incoterms xsi:type="xsd:string">' . self::xe($order->incoterms->value) . '</incoterms>';
             $xml .= '<category xsi:type="xsd:string">'  . self::xe($order->category->value)  . '</category>';
+
+            if ($order->freight !== null && $order->currency !== null) {
+                $xml .= '<freight xsi:type="xsd:string">'  . self::xe($order->freight)  . '</freight>';
+                $xml .= '<currency xsi:type="xsd:string">' . self::xe($order->currency) . '</currency>';
+            }
+        }
+
+        if ($order->costGroup !== null && $order->costGroup !== '') {
+            $xml .= '<costGroup xsi:type="xsd:string">' . self::xe($order->costGroup) . '</costGroup>';
         }
 
         if ($order->remarks !== '') {

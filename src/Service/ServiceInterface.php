@@ -11,10 +11,10 @@ namespace VeryCodeCom\Suus\Service;
  * into the correct <additionalService xsi:type="cw:AdditionalService"> complex-type XML.
  *
  * Field-name conventions used by SUUS:
- *   decimal1, decimal2 → xsd:decimal  (PHP float)
- *   varchar1, varchar2 → xsd:string   (PHP string)
- *   bool1, bool2       → xsd:boolean  (PHP bool)
- *   int01              → xsd:string   (WSDL quirk: named int but typed as string)
+ *   decimal1, decimal2 -> xsd:decimal  (PHP float)
+ *   varchar1, varchar2 -> xsd:string   (PHP string)
+ *   bool1, bool2       -> xsd:boolean  (PHP bool)
+ *   int01              -> xsd:string   (WSDL quirk: named int but typed as string)
  *
  * @api
  */
@@ -25,7 +25,7 @@ interface ServiceInterface
 
     /**
      * Returns only the non-null additional fields for this service.
-     * The array keys are SUUS field names (decimal1, varchar1, bool1, int01, …).
+     * The array keys are SUUS field names (decimal1, varchar1, bool1, int01, ...).
      * The builder infers the xsi:type from the key prefix.
      *
      * @return array<string, bool|float|string>

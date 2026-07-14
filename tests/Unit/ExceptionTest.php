@@ -7,11 +7,63 @@ namespace VeryCodeCom\Suus\Tests\Unit;
 use PHPUnit\Framework\TestCase;
 use VeryCodeCom\Suus\Exception\SuusApiException;
 use VeryCodeCom\Suus\Exception\SuusDuplicateReferenceException;
+use VeryCodeCom\Suus\Exception\SuusException;
 use VeryCodeCom\Suus\Exception\SuusValidationException;
 
 final class ExceptionTest extends TestCase
 {
-    // ── SuusApiException ─────────────────────────────────────────────
+    // -- Raw response + debug report ----------------------------------
+
+    public function testRawResponseIsNullByDefault(): void
+    {
+        $ex = new SuusApiException('msg', 'ERR001');
+        $this->assertNull($ex->getRawResponse());
+    }
+
+    public function testWithRawResponseIsFluentAndStoresBody(): void
+    {
+        $ex     = new SuusApiException('msg', 'BTN0001');
+        $return = $ex->withRawResponse('<xml>raw</xml>');
+
+        $this->assertSame($ex, $return);
+        $this->assertSame('<xml>raw</xml>', $ex->getRawResponse());
+    }
+
+    public function testGetDebugReportContainsMessageRawResponseAndTrace(): void
+    {
+        $ex = (new SuusApiException('SUUS addOrder failed [BTN0001]:', 'BTN0001'))
+            ->withRawResponse('<result><returnCode>BTN0001</returnCode></result>');
+
+        $report = $ex->getDebugReport();
+
+        $this->assertStringContainsString('SuusApiException', $report);
+        $this->assertStringContainsString('BTN0001', $report);
+        $this->assertStringContainsString('--- Raw SUUS response ---', $report);
+        $this->assertStringContainsString('<returnCode>BTN0001</returnCode>', $report);
+        $this->assertStringContainsString('--- Stack trace ---', $report);
+    }
+
+    public function testGetDebugReportOmitsRawSectionWhenNotcaptured(): void
+    {
+        $report = (new SuusValidationException(['bad date']))->getDebugReport();
+
+        $this->assertStringContainsString('SuusValidationException', $report);
+        $this->assertStringNotContainsString('--- Raw SUUS response ---', $report);
+        $this->assertStringContainsString('--- Stack trace ---', $report);
+    }
+
+    public function testGetDebugReportIncludesPreviousException(): void
+    {
+        $previous = new \RuntimeException('root cause');
+        $ex       = new SuusException('wrapper', 0, $previous);
+
+        $report = $ex->getDebugReport();
+
+        $this->assertStringContainsString('--- Caused by ---', $report);
+        $this->assertStringContainsString('root cause', $report);
+    }
+
+    // -- SuusApiException ---------------------------------------------
 
     public function testGetFormattedErrorsReturnsConcatenatedStrings(): void
     {
@@ -62,7 +114,7 @@ final class ExceptionTest extends TestCase
         $this->assertSame('CWS9999', $ex->returnCode);
     }
 
-    // ── SuusDuplicateReferenceException ──────────────────────────────
+    // -- SuusDuplicateReferenceException ------------------------------
 
     public function testDuplicateReferenceExceptionMessage(): void
     {
@@ -70,7 +122,7 @@ final class ExceptionTest extends TestCase
         $this->assertStringContainsString('ORDER-2025-001', $ex->getMessage());
     }
 
-    // ── SuusValidationException ───────────────────────────────────────
+    // -- SuusValidationException ---------------------------------------
 
     public function testValidationExceptionExposesErrors(): void
     {

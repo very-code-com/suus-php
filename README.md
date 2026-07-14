@@ -61,7 +61,7 @@ $client = SuusClient::production('ws_login', 'secret');
 $config = SuusConfig::fromEnv();
 
 // From array (framework config)
-$config = SuusConfig::fromArray(['login' => '…', 'password' => '…', 'env' => 'production']);
+$config = SuusConfig::fromArray(['login' => '...', 'password' => '...', 'env' => 'production']);
 ```
 
 | Env variable          | Required | Default      | Description                      |
@@ -71,6 +71,33 @@ $config = SuusConfig::fromArray(['login' => '…', 'password' => '…', 'env' =>
 | `SUUS_ENV`            | no       | `production` | `sandbox` or `production`        |
 | `SUUS_TIMEOUT`        | no       | `30`         | Request timeout (seconds)        |
 | `SUUS_CONNECT_TIMEOUT`| no       | `10`         | Connection timeout (seconds)     |
+| `SUUS_DEBUG`          | no       | `0`          | `1`/`true` to enable verbose debug output (see below) |
+
+### Debug mode
+
+Set the `debug` flag (constructor arg, `SUUS_DEBUG=1`, or `'debug' => true` in
+`fromArray`) to make the client attach the **raw SUUS response** to every thrown
+exception and log a full **debug report** (message + raw XML + stack trace) at
+`error` level via the injected PSR-3 logger:
+
+```php
+$config = new SuusConfig('ws_login', 'secret', sandbox: true, debug: true);
+$client = new SuusClient($config, logger: $myPsrLogger);
+
+try {
+    $client->createShipment($order);
+} catch (SuusException $e) {
+    // Raw response is always available for inspection, regardless of the flag:
+    echo $e->getRawResponse();   // the exact XML SUUS returned (or null)
+
+    // Full developer report: class + message + raw response + stack trace:
+    echo $e->getDebugReport();
+}
+```
+
+This is ideal for diagnosing **unrecognised** errors (e.g. bare `BTN0001`) where
+you need to see exactly what SUUS sent back. Leave `debug` off in production to
+keep exceptions and logs concise.
 
 ---
 
@@ -78,19 +105,43 @@ $config = SuusConfig::fromArray(['login' => '…', 'password' => '…', 'env' =>
 
 ### `createShipment(ShipmentOrder $order): ShipmentResult`
 
-Creates a shipment via SUUS `addOrder`. Validates locally first.  
+Creates a shipment via SUUS `addOrder`. Validates locally first.
 Returns `ShipmentResult` with `shipmentNo`, `reference`, `trackingUrl`.
 
-→ [full example](examples/01_create_shipment.php) · [international routes](examples/02_international_shipment.php) · [additional services](examples/05_additional_services.php)
+**`ShipmentOrder` fields:**
+
+| Field                | Type                | Required | Notes |
+|----------------------|---------------------|----------|-------|
+| `reference`          | `string`            | yes      | Your unique reference (<= 50 chars) |
+| `sender`             | `Address`           | yes      | Loading address |
+| `receiver`           | `Address`           | yes      | Unloading address |
+| `packages`           | `Package[]`         | yes      | >= 1 package |
+| `loadingDate`        | `?DateTimeImmutable`| no       | `null` = auto (+2 business days in sender's calendar) |
+| `unloadingDate`      | `?DateTimeImmutable`| no       | `null` = loadingDate + 3 business days |
+| `incoterms`          | `?Incoterm`         | intl.    | Required for international routes |
+| `orderType`          | `OrderType`         | no       | `B2C` default; **must be `B2B`** for international |
+| `category`           | `ShipmentCategory`  | no       | `DROBNICA` / `PLUS24` / `PTL` (international) |
+| `descriptionOfGoods` | `string`            | no       | Defaults to `General cargo` |
+| `remarks`            | `string`            | no       | Free-text remarks (<= 100 chars) |
+| `additionalServices` | `array`             | no       | Typed service objects - see [Additional Services](#additional-services) |
+| `costGroup`          | `?string`           | no       | Cost-group tag, <= 20 chars (e.g. `/SI`) |
+| `freight`            | `?string`           | no       | International only; must be paired with `currency` |
+| `currency`           | `?string`           | no       | 3-letter code; must be paired with `freight` |
+
+`Address` requires `name`, `street`, `streetNo`, `postcode`, `city`, `countryCode`
+and at least one of `phone` / `mobilePhone`; `contactPerson` and `email` are optional
+(some services require an e-mail on the relevant address).
+
+-> [full example](examples/01_create_shipment.php) | [international routes](examples/02_international_shipment.php) | [additional services](examples/05_additional_services.php)
 
 ### `fetchStatus(string $shipmentNo): StatusResult`
 
-Polls events via SUUS `getEvents`.  
+Polls events via SUUS `getEvents`.
 Returns `StatusResult` with `status` (`ShipmentStatus` enum), `rawLatestCode`, `events[]`.
 
 > **Note:** `getEvents` always returns `PRJ000001` in sandbox mode.
 
-→ [full example](examples/03_fetch_status.php)
+-> [full example](examples/03_fetch_status.php)
 
 **Status mapping:**
 
@@ -115,9 +166,9 @@ Downloads a document as raw PDF bytes via SUUS `getDocument`.
 
 ### `fetchLabel(string $shipmentNo): string`
 
-Convenience shortcut for `fetchDocument(…, DocumentType::Label)`.
+Convenience shortcut for `fetchDocument(..., DocumentType::Label)`.
 
-→ [full example](examples/04_fetch_document.php)
+-> [full example](examples/04_fetch_document.php)
 
 ### `getColliNumbers(string $shipmentNo): array`
 
@@ -127,39 +178,110 @@ Returns per-package (colli) tracking numbers for multi-package shipments.
 
 ## Package Types
 
-| `PackageSymbol` | Description              |
-|-----------------|--------------------------|
-| `KAR`           | Cardboard box            |
-| `EUR`           | EUR pallet               |
-| `JED`           | Disposable pallet        |
-| `PLT`           | Standard pallet          |
-| `SKR`           | Crate / chest            |
-| `ROL`           | Roll                     |
-| `DPL`           | Double pallet            |
-| `DHP`           | Large heavy package      |
-| `CHP`           | Heavy package            |
-| `AGD`           | Appliance                |
-| `INN`           | Other                    |
-| `WIA`           | Bucket                   |
-| `HB`            | Half-block               |
+| `PackageSymbol` | Description               |
+|-----------------|---------------------------|
+| `KAR`           | Cardboard box (karton)    |
+| `EUR`           | EUR pallet                |
+| `JED`           | Disposable pallet         |
+| `PLT`           | Industrial pallet         |
+| `SKR`           | Crate (skrzynia)          |
+| `ROL`           | Roll (rolka)              |
+| `DPL`           | DPPL container            |
+| `DHP`           | DHP pallet                |
+| `CHP`           | CHEP pallet               |
+| `AGD`           | Appliance (gabaryt AGD)   |
+| `INN`           | Other / re-handling       |
+| `WIA`           | Bundle (wiązka)           |
+| `HB`            | Hobok                     |
+
+Every `Package` carries `weightKg` (required) and optional `lengthCm`, `widthCm`,
+`heightCm`. For a **returnable EUR pallet** set `returnable` and `stackable` (SUUS
+requires `stackable = 1` when `symbol = EUR` and `returnable > 0`). Returnable /
+stackable packaging is domestic-only.
+
+```php
+new Package(PackageSymbol::EUR, weightKg: 50.0, lengthCm: 120.0, widthCm: 80.0, heightCm: 144.0, returnable: 1, stackable: 1);
+```
+
+**SUUS package limits** (enforced locally by `ShipmentValidator`): max 126 kg per
+package, max 800 kg per order, max 124 packages, max dimensions 240 x 120 x 220 cm,
+and a minimum height of 20 cm for EUR pallets.
+
+---
+
+## Additional Services
+
+Pass typed service objects in `ShipmentOrder`'s `additionalServices` array. Each
+maps to a SUUS service symbol and its fields are serialized automatically.
+
+| Service class                | SUUS symbol                     | Availability            | Key options |
+|------------------------------|---------------------------------|-------------------------|-------------|
+| `CodService`                 | `RohligCOD`                     | B2B & B2C               | `amount` (<= 15 000 PLN), `currency` (`PLN`) |
+| `InsuranceService`           | `RohligUbezpieczenie3`          | B2B & B2C               | `amount`, `goodsType`, `additionalCosts`, `strikeClause`, `warClause`, `confirmGoodsNotExcluded` |
+| `EmailNotificationService`   | `RohligZatwierdzeniePowiadomienie` | B2B & B2C            | `notifySender`, `notifyReceiver` (each party notified needs an e-mail on its address) |
+| `LiftService`                | `RohligWinda`                   | B2B & B2C               | tail-lift (<= 750 kg) |
+| `PalletTruckService`         | `StdPaleciak`                   | B2B & B2C               | pallet truck at delivery |
+| `SmsNotificationService`     | `StdAwizacjaSms`                | **B2C, domestic only**  | receiver **mobilePhone required** (`PRJ00355`) |
+| `InsideDeliveryService`      | `StdWniesienie2`                | **B2C, domestic only**  | carry goods inside |
+
+```php
+use VeryCodeCom\Suus\Service\{CodService, InsuranceService, EmailNotificationService};
+
+additionalServices: [
+    new CodService(amount: 250.0, currency: 'PLN'),
+    new InsuranceService(amount: 2500.0, goodsType: InsuranceService::GOODS_STANDARD),
+    new EmailNotificationService(notifySender: true, notifyReceiver: true),
+],
+```
+
+> **Insurance note:** `InsuranceService` always sends the mandatory SUUS declaration
+> that the goods are not in an excluded group (`int01 = 1`; omitting it triggers
+> `PRJ000293`). Disable it explicitly with `confirmGoodsNotExcluded: false` if ever
+> required. Goods types: `GOODS_STANDARD` (`UB_POZ`), `GOODS_PHARMA` (`UB_LEK`),
+> `GOODS_TEMP` (`UB_TEMP`). SUUS enforces a minimum insured value (1 000 PLN) and
+> `PLN`-only currency.
+
+-> [full example](examples/05_additional_services.php)
 
 ---
 
 ## International Routes & Incoterms
 
-`incoterms` is required whenever sender or receiver is not in Poland.
+A shipment is **international** whenever **either** the sender or the receiver is
+outside Poland. Only `PL->PL` counts as domestic. For every international route:
 
-| Route    | Incoterms required | Notes                       |
-|----------|--------------------|-----------------------------|
-| `PL→PL`  | No                 | Domestic, no restrictions   |
-| `PL→DE`  | Yes                |                             |
-| `PL→AT`  | Yes                |                             |
-| `PL→CH`  | Yes                | Swiss customs docs required |
-| `DE→DE`  | No                 |                             |
-| `DE→AT`  | Yes                |                             |
-| `DE→CH`  | Yes                | Swiss customs docs required |
+- `incoterms` is **required** (otherwise SUUS returns `PRJ00313`);
+- `orderType` **must be `B2B`** - B2C is not supported for international routes;
+- `returnable` / `stackable` packaging is **not available** (`PRJ00372` / `PRJ00373`);
+- the domestic-only B2C services (SMS pre-advice, inside delivery) cannot be used;
+- `freight` + `currency` may optionally be declared (both together, per `PRJ00387`).
+
+| Route    | Classified as | Incoterms required |
+|----------|---------------|--------------------|
+| `PL->PL`  | Domestic      | No                 |
+| `PL->DE`  | International  | Yes                |
+| `PL->CH`  | International  | Yes (Swiss customs docs) |
+| `DE->DE`  | International  | Yes                |
+| `DE->AT`  | International  | Yes                |
+| `DE->CH`  | International  | Yes (Swiss customs docs) |
 
 Supported incoterms: `EXW`, `FCA`, `FAS`, `FOB`, `CFR`, `CIF`, `CPT`, `CIP`, `DAP`, `DDP`.
+
+```php
+$result = $client->createShipment(new ShipmentOrder(
+    reference: 'INT-2025-001',
+    sender:    new Address('Versender GmbH', 'Musterstr.', '1', '10115', 'Berlin', 'DE', phone: '+4930123'),
+    receiver:  new Address('Empfänger GmbH', 'Hauptstr.', '10', '80331', 'Munich', 'DE', phone: '+4989654'),
+    packages:  [new Package(PackageSymbol::KAR, weightKg: 10.0, lengthCm: 50.0, widthCm: 30.0, heightCm: 25.0)],
+    incoterms: Incoterm::DAP,
+    orderType: OrderType::B2B,   // required for international
+    category:  ShipmentCategory::DROBNICA,
+    freight:   '150.00',          // optional - must be paired with currency
+    currency:  'EUR',
+));
+```
+
+-> [full example](examples/02_international_shipment.php)
 
 ---
 
@@ -200,7 +322,7 @@ $cal->isBusinessDay(new DateTimeImmutable('2024-04-01'));  // true  - Western Ea
 
 `CalendarFactory::forCountry(string $cc)` returns the right instance for any supported country code; unknown codes fall back to `PolishCalendar`.
 
-→ [full example](examples/06_calendar.php)
+-> [full example](examples/06_calendar.php)
 
 ---
 
@@ -213,9 +335,13 @@ All exceptions extend `VeryCodeCom\Suus\Exception\SuusException`.
 | `SuusValidationException`          | Local validation failed (date, incoterms, package limits)    |
 | `SuusAuthException`                | SUUS rejects credentials (`DRG00001`)                        |
 | `SuusDuplicateReferenceException`  | Reference already exists (`PRJ00310`)                        |
-| `SuusApiException`                 | Other SUUS API errors - contains `returnCode`, `errorCodes`  |
+| `SuusApiException`                 | Other SUUS API errors - carries `returnCode` + `errorCodes`; the message also includes SUUS's `returnDesc` for bare codes (e.g. `BTN0001` = service temporarily unavailable) |
 | `SuusTransportException`           | Network error or non-200 HTTP response                       |
 | `SuusResponseParseException`       | SUUS returned unparseable XML                                |
+
+Every exception extends `SuusException` and exposes `getRawResponse(): ?string`
+(the exact XML SUUS returned, when captured) and `getDebugReport(): string`
+(message + raw response + stack trace) - see [Debug mode](#debug-mode).
 
 ---
 
@@ -232,7 +358,7 @@ new SuusClient(
 )
 ```
 
-→ [testing example](examples/07_di_and_testing.php)
+-> [testing example](examples/07_di_and_testing.php)
 
 ---
 
@@ -256,14 +382,14 @@ composer install
 vendor/bin/phpunit --testsuite unit
 
 # Integration tests against the real SUUS sandbox
-SUUS_LOGIN=ws_xxx SUUS_PASSWORD=xxx SUUS_ENV=sandbox \
+SUUS_SANDBOX=1 SUUS_LOGIN=ws_xxx SUUS_PASSWORD=xxx \
   vendor/bin/phpunit --testsuite integration
 
 # Manual sandbox smoke test (creates a real shipment, prints raw SOAP request/response)
 SUUS_LOGIN=ws_xxx SUUS_PASSWORD=xxx php test_sandbox.php
 ```
 
-The smoke test (`test_sandbox.php`) hits the sandbox endpoint directly and prints the full XML exchange — useful for verifying credentials and connectivity without running the full test suite. A successful run looks like:
+The smoke test (`test_sandbox.php`) hits the sandbox endpoint directly and prints the full XML exchange - useful for verifying credentials and connectivity without running the full test suite. A successful run looks like:
 
 ```
 --- SUCCESS ---

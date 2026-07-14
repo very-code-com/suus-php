@@ -23,9 +23,9 @@ final class PolishCalendarTest extends TestCase
         $this->cal = new PolishCalendar();
     }
 
-    // ──────────────────────────────────────────────
+    // ----------------------------------------------
     // isBusinessDay - weekends
-    // ──────────────────────────────────────────────
+    // ----------------------------------------------
 
     public function testSaturdayIsNotABusinessDay(): void
     {
@@ -43,9 +43,9 @@ final class PolishCalendarTest extends TestCase
         $this->assertTrue($this->cal->isBusinessDay(new \DateTimeImmutable('2025-06-09')));
     }
 
-    // ──────────────────────────────────────────────
+    // ----------------------------------------------
     // isBusinessDay - fixed holidays
-    // ──────────────────────────────────────────────
+    // ----------------------------------------------
 
     /** @dataProvider fixedHolidayProvider */
     #[DataProvider('fixedHolidayProvider')]
@@ -69,9 +69,9 @@ final class PolishCalendarTest extends TestCase
         ];
     }
 
-    // ──────────────────────────────────────────────
+    // ----------------------------------------------
     // isBusinessDay - Easter-based movable holidays
-    // ──────────────────────────────────────────────
+    // ----------------------------------------------
 
     public function testEasterSundayIsNotABusinessDay(): void
     {
@@ -97,9 +97,9 @@ final class PolishCalendarTest extends TestCase
         $this->assertFalse($this->cal->isBusinessDay(new \DateTimeImmutable('2025-06-19')));
     }
 
-    // ──────────────────────────────────────────────
+    // ----------------------------------------------
     // easterDate()
-    // ──────────────────────────────────────────────
+    // ----------------------------------------------
 
     /** @dataProvider easterProvider */
     #[DataProvider('easterProvider')]
@@ -120,9 +120,9 @@ final class PolishCalendarTest extends TestCase
         ];
     }
 
-    // ──────────────────────────────────────────────
+    // ----------------------------------------------
     // addBusinessDays()
-    // ──────────────────────────────────────────────
+    // ----------------------------------------------
 
     public function testAddOneBusinessDaySkipsWeekend(): void
     {
@@ -137,7 +137,7 @@ final class PolishCalendarTest extends TestCase
         // Thursday 2025-04-17 + 2 business days:
         //   Fri Apr 18 = Good Friday (not a PL holiday, counted as business day)
         //   Skip Sat Apr 19, Sun Apr 20 (Easter), Mon Apr 21 (Easter Monday)
-        //   → Tue Apr 22 (second business day)
+        //   -> Tue Apr 22 (second business day)
         $from   = new \DateTimeImmutable('2025-04-17');
         $result = $this->cal->addBusinessDays($from, 2);
         $this->assertSame('2025-04-22', $result->format('Y-m-d'));
@@ -150,9 +150,9 @@ final class PolishCalendarTest extends TestCase
         $this->assertSame('2025-06-09', $result->format('Y-m-d'));
     }
 
-    // ──────────────────────────────────────────────
+    // ----------------------------------------------
     // minLoadingDate() - SUUS +2 business days rule
-    // ──────────────────────────────────────────────
+    // ----------------------------------------------
 
     public function testMinLoadingDateFromMonday(): void
     {

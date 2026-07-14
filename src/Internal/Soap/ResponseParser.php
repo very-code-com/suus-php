@@ -12,7 +12,7 @@ use VeryCodeCom\Suus\Exception\SuusResponseParseException;
  * SUUS SOAP namespace quirk (critical):
  *   - Requests send:    xmlns:cw="cw"
  *   - Responses return: xmlns:cw="ns1" on Envelope + xmlns:ns1="cw" on the response element
- *   - Result: child elements (result, success, shipmentNo, errorCodes…) have NO namespace.
+ *   - Result: child elements (result, success, shipmentNo, errorCodes...) have NO namespace.
  *   - Fix: always query with unqualified XPath (//success, //shipmentNo) - never //cw:success.
  *
  * @internal This class is not part of the public API and may change without notice.
@@ -42,9 +42,9 @@ final class ResponseParser
         return $xpath;
     }
 
-    // ─────────────────────────────────────────────────────────────────
+    // -----------------------------------------------------------------
     // Typed helpers used by SuusClient
-    // ─────────────────────────────────────────────────────────────────
+    // -----------------------------------------------------------------
 
     /** Extract <result><success> text - "true" means success. */
     public function isSuccess(\DOMXPath $xpath): bool
@@ -55,6 +55,15 @@ final class ResponseParser
     public function returnCode(\DOMXPath $xpath): string
     {
         return $this->textOf($xpath, '//result/returnCode');
+    }
+
+    /**
+     * Extract <result><returnDesc> - a human-readable description SUUS may return
+     * alongside the return code (empty for some codes, e.g. BTN0001).
+     */
+    public function returnDesc(\DOMXPath $xpath): string
+    {
+        return $this->textOf($xpath, '//result/returnDesc');
     }
 
     /** @return array<array{code: string, message: string}> */
@@ -170,9 +179,9 @@ final class ResponseParser
         return $points;
     }
 
-    // ─────────────────────────────────────────────────────────────────
+    // -----------------------------------------------------------------
     // Internal helpers
-    // ─────────────────────────────────────────────────────────────────
+    // -----------------------------------------------------------------
 
     private function textOf(\DOMXPath $xpath, string $query, ?\DOMNode $context = null): string
     {

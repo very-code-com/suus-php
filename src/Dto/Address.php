@@ -7,7 +7,7 @@ namespace VeryCodeCom\Suus\Dto;
 /**
  * Immutable address value object used for sender (loadingAddress) and receiver (unloadingAddress).
  *
- * For international shipments (non-PL→PL) the same address is also used
+ * For international shipments (non-PL->PL) the same address is also used
  * as shipper / consignee - SUUS requires all four fields in that case.
  */
 final class Address

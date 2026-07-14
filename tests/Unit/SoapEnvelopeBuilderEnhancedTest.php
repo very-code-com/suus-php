@@ -8,6 +8,7 @@ use VeryCodeCom\Suus\Dto\Address;
 use VeryCodeCom\Suus\Dto\Package;
 use VeryCodeCom\Suus\Dto\ShipmentOrder;
 use VeryCodeCom\Suus\Enum\Incoterm;
+use VeryCodeCom\Suus\Enum\OrderType;
 use VeryCodeCom\Suus\Enum\PackageSymbol;
 use VeryCodeCom\Suus\Internal\Soap\SoapEnvelopeBuilder;
 use VeryCodeCom\Suus\Service\CodService;
@@ -33,7 +34,7 @@ final class SoapEnvelopeBuilderEnhancedTest extends TestCase
         $this->builder = new SoapEnvelopeBuilder(SuusConfig::sandbox('user', 'pass'));
     }
 
-    // ── Helper ────────────────────────────────────────────────────────
+    // -- Helper --------------------------------------------------------
 
     private function makeOrder(array $additionalServices = [], array $packages = []): ShipmentOrder
     {
@@ -53,7 +54,7 @@ final class SoapEnvelopeBuilderEnhancedTest extends TestCase
         return $this->builder->buildAddOrder($order, '2025-09-15', '2025-09-18');
     }
 
-    // ── Additional services: element name ─────────────────────────────
+    // -- Additional services: element name -----------------------------
 
     public function testAdditionalServiceUsesCorrectElementName(): void
     {
@@ -82,7 +83,7 @@ final class SoapEnvelopeBuilderEnhancedTest extends TestCase
         $this->assertStringContainsString('SOAP-ENC:arrayType="cw:AdditionalService[2]"', $xml);
     }
 
-    // ── COD service XML ───────────────────────────────────────────────
+    // -- COD service XML -----------------------------------------------
 
     public function testCodServiceSymbolInXml(): void
     {
@@ -102,7 +103,7 @@ final class SoapEnvelopeBuilderEnhancedTest extends TestCase
         $this->assertStringContainsString('<varchar1 xsi:type="xsd:string">PLN</varchar1>', $xml);
     }
 
-    // ── Insurance service XML ─────────────────────────────────────────
+    // -- Insurance service XML -----------------------------------------
 
     public function testInsuranceServiceSymbolInXml(): void
     {
@@ -119,12 +120,13 @@ final class SoapEnvelopeBuilderEnhancedTest extends TestCase
 
     public function testInsuranceServiceInt01AsStringInXml(): void
     {
-        // int01 must be xsd:string per WSDL despite the name
-        $xml = $this->build($this->makeOrder([new InsuranceService(500.0, goodsDeclaration: 'DECL-1')]));
-        $this->assertStringContainsString('<int01 xsi:type="xsd:string">DECL-1</int01>', $xml);
+        // int01 must be xsd:string per WSDL despite the name; it is the mandatory
+        // "goods not excluded" declaration, always emitted as "1".
+        $xml = $this->build($this->makeOrder([new InsuranceService(500.0)]));
+        $this->assertStringContainsString('<int01 xsi:type="xsd:string">1</int01>', $xml);
     }
 
-    // ── Lift service XML ──────────────────────────────────────────────
+    // -- Lift service XML ----------------------------------------------
 
     public function testLiftServiceBool1TrueInXml(): void
     {
@@ -133,7 +135,7 @@ final class SoapEnvelopeBuilderEnhancedTest extends TestCase
         $this->assertStringContainsString('<bool1 xsi:type="xsd:boolean">true</bool1>', $xml);
     }
 
-    // ── Legacy string backward compatibility ──────────────────────────
+    // -- Legacy string backward compatibility --------------------------
 
     public function testLegacyStringServiceCodeStillWorks(): void
     {
@@ -146,7 +148,7 @@ final class SoapEnvelopeBuilderEnhancedTest extends TestCase
         $this->assertStringNotContainsString('<service xsi:type="xsd:string">', $xml);
     }
 
-    // ── Package returnable / stackable ────────────────────────────────
+    // -- Package returnable / stackable --------------------------------
 
     public function testPackageReturnableAppearsInXml(): void
     {
@@ -170,7 +172,54 @@ final class SoapEnvelopeBuilderEnhancedTest extends TestCase
         $this->assertStringNotContainsString('<stackable', $xml);
     }
 
-    // ── getDeliveryPoints envelope ────────────────────────────────────
+    // -- Header: costGroup / freight / currency ------------------------
+
+    public function testCostGroupAppearsInHeaderXml(): void
+    {
+        $order = new ShipmentOrder(
+            reference:  'CG-1',
+            sender:     new Address('Sender Co', 'Lipowa', '1', '30-001', 'Kraków', 'PL', phone: '+48600111222'),
+            receiver:   new Address('Recv Sp', 'Testowa', '2', '00-950', 'Warszawa', 'PL', phone: '+48600333444'),
+            packages:   [new Package(PackageSymbol::KAR, weightKg: 10.0)],
+            costGroup:  '/SI',
+        );
+        $xml = $this->build($order);
+        $this->assertStringContainsString('<costGroup xsi:type="xsd:string">/SI</costGroup>', $xml);
+    }
+
+    public function testFreightAndCurrencyAppearForInternationalOrder(): void
+    {
+        $order = new ShipmentOrder(
+            reference:  'FR-1',
+            sender:     new Address('Sender Co', 'Lipowa', '1', '30-001', 'Kraków', 'PL', phone: '+48600111222'),
+            receiver:   new Address('Emp GmbH', 'Berliner Str.', '10', '10117', 'Berlin', 'DE', phone: '+4930999888'),
+            packages:   [new Package(PackageSymbol::KAR, weightKg: 10.0)],
+            incoterms:  Incoterm::DAP,
+            orderType:  OrderType::B2B,
+            freight:    '150.00',
+            currency:   'EUR',
+        );
+        $xml = $this->build($order);
+        $this->assertStringContainsString('<freight xsi:type="xsd:string">150.00</freight>', $xml);
+        $this->assertStringContainsString('<currency xsi:type="xsd:string">EUR</currency>', $xml);
+    }
+
+    public function testFreightOmittedForDomesticOrder(): void
+    {
+        $order = new ShipmentOrder(
+            reference:  'FR-DOM',
+            sender:     new Address('Sender Co', 'Lipowa', '1', '30-001', 'Kraków', 'PL', phone: '+48600111222'),
+            receiver:   new Address('Recv Sp', 'Testowa', '2', '00-950', 'Warszawa', 'PL', phone: '+48600333444'),
+            packages:   [new Package(PackageSymbol::KAR, weightKg: 10.0)],
+            freight:    '150.00',
+            currency:   'EUR',
+        );
+        $xml = $this->build($order);
+        $this->assertStringNotContainsString('<freight', $xml);
+        $this->assertStringNotContainsString('<currency', $xml);
+    }
+
+    // -- getDeliveryPoints envelope ------------------------------------
 
     public function testGetDeliveryPointsEnvelopeHasCorrectMethod(): void
     {

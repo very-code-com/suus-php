@@ -10,6 +10,7 @@ use VeryCodeCom\Suus\Dto\DeliveryPoint;
 use VeryCodeCom\Suus\Dto\Package;
 use VeryCodeCom\Suus\Dto\ShipmentOrder;
 use VeryCodeCom\Suus\Enum\Incoterm;
+use VeryCodeCom\Suus\Enum\OrderType;
 use VeryCodeCom\Suus\Enum\PackageSymbol;
 use VeryCodeCom\Suus\Exception\SuusValidationException;
 use VeryCodeCom\Suus\Internal\Soap\ResponseParser;
@@ -29,7 +30,7 @@ final class FieldLengthAndDeliveryPointTest extends TestCase
         $this->validator = new ShipmentValidator(new PolishCalendar());
     }
 
-    // ── Reference length ──────────────────────────────────────────────
+    // -- Reference length ----------------------------------------------
 
     public function testReferenceTooLongProducesError(): void
     {
@@ -47,7 +48,7 @@ final class FieldLengthAndDeliveryPointTest extends TestCase
         $this->assertEmpty(array_filter($errors, fn($e) => str_contains($e, 'reference')));
     }
 
-    // ── Sender address field lengths ──────────────────────────────────
+    // -- Sender address field lengths ----------------------------------
 
     public function testSenderNameTooLongProducesError(): void
     {
@@ -84,7 +85,7 @@ final class FieldLengthAndDeliveryPointTest extends TestCase
         $this->assertContainsErrorAbout($errors, 'sender.phone', '30');
     }
 
-    // ── Receiver address field lengths ────────────────────────────────
+    // -- Receiver address field lengths --------------------------------
 
     public function testReceiverNameTooLongProducesError(): void
     {
@@ -93,7 +94,7 @@ final class FieldLengthAndDeliveryPointTest extends TestCase
         $this->assertContainsErrorAbout($errors, 'receiver.name', '100');
     }
 
-    // ── Valid addresses pass ───────────────────────────────────────────
+    // -- Valid addresses pass -------------------------------------------
 
     public function testValidAddressesProduceNoFieldLengthErrors(): void
     {
@@ -104,7 +105,7 @@ final class FieldLengthAndDeliveryPointTest extends TestCase
         $this->assertEmpty($lengthErrors);
     }
 
-    // ── SuusClient throws on field length errors ───────────────────────
+    // -- SuusClient throws on field length errors -----------------------
 
     public function testClientThrowsValidationExceptionForLongReference(): void
     {
@@ -123,7 +124,7 @@ final class FieldLengthAndDeliveryPointTest extends TestCase
         $client->createShipment($this->makeOrder(reference: str_repeat('R', 51)));
     }
 
-    // ── DeliveryPoint DTO ─────────────────────────────────────────────
+    // -- DeliveryPoint DTO ---------------------------------------------
 
     public function testDeliveryPointStoresAllFields(): void
     {
@@ -157,7 +158,7 @@ final class FieldLengthAndDeliveryPointTest extends TestCase
         $this->assertSame('', $dp->timeTo);
     }
 
-    // ── ResponseParser::deliveryPoints ────────────────────────────────
+    // -- ResponseParser::deliveryPoints --------------------------------
 
     public function testResponseParserExtractsDeliveryPoints(): void
     {
@@ -223,7 +224,7 @@ final class FieldLengthAndDeliveryPointTest extends TestCase
         $this->assertSame([], $parser->deliveryPoints($xpath));
     }
 
-    // ── SuusClient::getDeliveryPoints integration ─────────────────────
+    // -- SuusClient::getDeliveryPoints integration ---------------------
 
     public function testClientGetDeliveryPointsReturnsDtoList(): void
     {
@@ -264,7 +265,7 @@ final class FieldLengthAndDeliveryPointTest extends TestCase
         $this->assertSame('08:00',  $points[0]->timeFrom);
     }
 
-    // ── Helpers ──────────────────────────────────────────────────────
+    // -- Helpers ------------------------------------------------------
 
     private function makeOrder(
         string $reference     = 'REF-001',
@@ -281,6 +282,7 @@ final class FieldLengthAndDeliveryPointTest extends TestCase
             receiver:  new Address($receiverName, 'Hauptstr.', '5', '10115', 'Berlin', 'DE', phone: '+4930123'),
             packages:  [new Package(PackageSymbol::KAR, weightKg: 10.0)],
             incoterms: Incoterm::DAP,
+            orderType: OrderType::B2B,
             loadingDate: new \DateTimeImmutable('2099-12-01'), // far future to skip date validation
         );
     }

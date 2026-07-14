@@ -8,6 +8,7 @@ use VeryCodeCom\Suus\Calendar\BusinessCalendarInterface;
 use VeryCodeCom\Suus\Calendar\CalendarFactory;
 use VeryCodeCom\Suus\Dto\Address;
 use VeryCodeCom\Suus\Dto\ShipmentOrder;
+use VeryCodeCom\Suus\Enum\OrderType;
 use VeryCodeCom\Suus\Enum\PackageSymbol;
 
 /**
@@ -18,11 +19,11 @@ use VeryCodeCom\Suus\Enum\PackageSymbol;
  *   - Max 126 kg per package
  *   - Max 800 kg total per order
  *   - Max 124 packages per order
- *   - Max dimensions: 240 × 120 × 220 cm
+ *   - Max dimensions: 240 x 120 x 220 cm
  *   - Loading date must be a business day in the sender's country, at least +2 business days from today
- *   - incoterms required for non-PL→PL routes
- *   - Address field lengths (WSDL limits): name≤100, street≤50, streetNo≤10, postcode≤10, city≤50, phone≤30
- *   - reference≤50 characters
+ *   - incoterms required for non-PL->PL routes
+ *   - Address field lengths (WSDL limits): name<=100, street<=50, streetNo<=10, postcode<=10, city<=50, phone<=30
+ *   - reference<=50 characters
  *
  * @internal This class is not part of the public API and may change without notice.
  */
@@ -49,6 +50,9 @@ final class ShipmentValidator
     private const MAX_POSTCODE_LEN   = 10;
     private const MAX_CITY_LEN       = 50;
     private const MAX_PHONE_LEN      = 30;
+    private const MAX_COST_GROUP_LEN = 20;
+    private const MAX_FREIGHT_LEN    = 50;
+    private const CURRENCY_LEN       = 3;
 
     public function __construct(private readonly ?BusinessCalendarInterface $calendar = null) {}
 
@@ -64,6 +68,7 @@ final class ShipmentValidator
         $this->validatePackages($order, $errors);
         $this->validateLoadingDate($order, $errors, $referenceDate, $cal);
         $this->validateIncoterms($order, $errors);
+        $this->validateInternationalHeader($order, $errors);
         $this->validateFieldLengths($order, $errors);
 
         return $errors;
@@ -137,7 +142,37 @@ final class ShipmentValidator
         if ($order->isInternational() && $order->incoterms === null) {
             $from = $order->sender->getCountryCode();
             $to   = $order->receiver->getCountryCode();
-            $errors[] = "incoterms is required for non-PL→PL routes (route: {$from}→{$to}).";
+            $errors[] = "incoterms is required for non-PL->PL routes (route: {$from}->{$to}).";
+        }
+    }
+
+    /**
+     * Header rules specific to international (non-PL->PL) orders, per SUUS WS docs:
+     *   - only orderType B2B is supported for international routes
+     *   - freight and currency must be provided together or not at all (PRJ00387)
+     *   - currency must be a 3-letter code; freight <= 50 chars; costGroup <= 20 chars
+     *
+     * @param string[] $errors
+     */
+    private function validateInternationalHeader(ShipmentOrder $order, array &$errors): void
+    {
+        if ($order->isInternational() && $order->orderType !== OrderType::B2B) {
+            $errors[] = 'International orders support only orderType B2B (SUUS rule).';
+        }
+
+        $hasFreight  = $order->freight  !== null && $order->freight  !== '';
+        $hasCurrency = $order->currency !== null && $order->currency !== '';
+        if ($hasFreight !== $hasCurrency) {
+            $errors[] = 'freight and currency must be provided together or not at all (SUUS rule PRJ00387).';
+        }
+        if ($hasCurrency && mb_strlen((string) $order->currency) !== self::CURRENCY_LEN) {
+            $errors[] = 'currency must be a 3-letter code (e.g. EUR, PLN).';
+        }
+        if ($hasFreight && mb_strlen((string) $order->freight) > self::MAX_FREIGHT_LEN) {
+            $errors[] = 'freight exceeds ' . self::MAX_FREIGHT_LEN . ' characters (SUUS WSDL limit).';
+        }
+        if ($order->costGroup !== null && mb_strlen($order->costGroup) > self::MAX_COST_GROUP_LEN) {
+            $errors[] = 'costGroup exceeds ' . self::MAX_COST_GROUP_LEN . ' characters (SUUS WSDL limit).';
         }
     }
 

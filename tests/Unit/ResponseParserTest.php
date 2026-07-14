@@ -51,6 +51,19 @@ final class ResponseParserTest extends TestCase
         $this->assertSame('CWS0001', $this->parser->returnCode($xpath));
     }
 
+    public function testExtractReturnDescWhenPresent(): void
+    {
+        $xpath = $this->parser->parse($this->fixture('add_order_service_unavailable'));
+        $this->assertSame('BTN0001', $this->parser->returnCode($xpath));
+        $this->assertSame('Service temporarily unavailable', $this->parser->returnDesc($xpath));
+    }
+
+    public function testReturnDescIsEmptyWhenAbsent(): void
+    {
+        $xpath = $this->parser->parse($this->fixture('add_order_success'));
+        $this->assertSame('', $this->parser->returnDesc($xpath));
+    }
+
     public function testExtractErrorCodes(): void
     {
         $xpath  = $this->parser->parse($this->fixture('add_order_duplicate_ref'));

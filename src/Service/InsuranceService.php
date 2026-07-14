@@ -22,12 +22,15 @@ final class InsuranceService implements ServiceInterface
     public const GOODS_TEMP      = 'UB_TEMP';
 
     /**
-     * @param float       $amount          Declared goods value (PLN).
-     * @param string      $goodsType       One of GOODS_STANDARD, GOODS_PHARMA, GOODS_TEMP.
-     * @param float       $additionalCosts Additional transport costs to insure (PLN).
-     * @param bool        $strikeClause    Include strike clause.
-     * @param bool        $warClause       Include war clause.
-     * @param string|null $goodsDeclaration Goods declaration number (sent as int01, typed xsd:string per WSDL).
+     * @param float  $amount          Declared goods value (PLN).
+     * @param string $goodsType       One of GOODS_STANDARD, GOODS_PHARMA, GOODS_TEMP.
+     * @param float  $additionalCosts Additional transport costs to insure (PLN).
+     * @param bool   $strikeClause    Include strike clause.
+     * @param bool   $warClause       Include war clause.
+     * @param bool   $confirmGoodsNotExcluded Mandatory SUUS declaration that the insured
+     *                                goods do NOT belong to the excluded groups. Emitted as
+     *                                int01=1 (xsd:string per WSDL). SUUS rejects insurance
+     *                                without it (PRJ000293), so this defaults to true.
      */
     public function __construct(
         public readonly float       $amount,
@@ -35,7 +38,7 @@ final class InsuranceService implements ServiceInterface
         public readonly float       $additionalCosts   = 0.0,
         public readonly bool        $strikeClause      = false,
         public readonly bool        $warClause         = false,
-        public readonly ?string     $goodsDeclaration  = null,
+        public readonly bool        $confirmGoodsNotExcluded = true,
     ) {
         if ($amount <= 0) {
             throw new \InvalidArgumentException('InsuranceService amount must be > 0.');
@@ -63,9 +66,9 @@ final class InsuranceService implements ServiceInterface
             'bool2'    => $this->warClause,
         ];
 
-        if ($this->goodsDeclaration !== null) {
-            // int01 is xsd:string per WSDL despite its name
-            $fields['int01'] = $this->goodsDeclaration;
+        if ($this->confirmGoodsNotExcluded) {
+            // Mandatory SUUS declaration: int01=1 (xsd:string per WSDL despite the name).
+            $fields['int01'] = '1';
         }
 
         return $fields;

@@ -9,7 +9,7 @@ use VeryCodeCom\Suus\SuusConfig;
 
 class SuusConfigTest extends TestCase
 {
-    // ── fromEnv() ─────────────────────────────────────────────────────────────
+    // -- fromEnv() -------------------------------------------------------------
 
     public function testFromEnvProductionByDefault(): void
     {
@@ -92,7 +92,7 @@ class SuusConfigTest extends TestCase
         putenv('SUUS_LOGIN');
     }
 
-    // ── fromArray() ───────────────────────────────────────────────────────────
+    // -- fromArray() -----------------------------------------------------------
 
     public function testFromArrayProduction(): void
     {
@@ -146,7 +146,52 @@ class SuusConfigTest extends TestCase
         self::assertSame('production', $config->getEnvironment());
     }
 
-    // ── named constructors ────────────────────────────────────────────────────
+    // -- debug flag -------------------------------------------------------------
+
+    public function testDebugDefaultsToFalse(): void
+    {
+        $config = new SuusConfig('ws_login', 'secret');
+        self::assertFalse($config->debug);
+    }
+
+    public function testFromArrayReadsDebugFlag(): void
+    {
+        $config = SuusConfig::fromArray(['login' => 'ws_login', 'password' => 'secret', 'debug' => true]);
+        self::assertTrue($config->debug);
+    }
+
+    public function testFromEnvReadsDebugFlag(): void
+    {
+        putenv('SUUS_LOGIN=ws_login');
+        putenv('SUUS_PASSWORD=secret');
+        putenv('SUUS_DEBUG=1');
+
+        try {
+            $config = SuusConfig::fromEnv();
+            self::assertTrue($config->debug);
+        } finally {
+            putenv('SUUS_LOGIN');
+            putenv('SUUS_PASSWORD');
+            putenv('SUUS_DEBUG');
+        }
+    }
+
+    public function testFromEnvDebugDefaultsToFalse(): void
+    {
+        putenv('SUUS_LOGIN=ws_login');
+        putenv('SUUS_PASSWORD=secret');
+        putenv('SUUS_DEBUG');
+
+        try {
+            $config = SuusConfig::fromEnv();
+            self::assertFalse($config->debug);
+        } finally {
+            putenv('SUUS_LOGIN');
+            putenv('SUUS_PASSWORD');
+        }
+    }
+
+    // -- named constructors ----------------------------------------------------
 
     public function testSandboxNamedConstructor(): void
     {

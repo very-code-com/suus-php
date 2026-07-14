@@ -68,7 +68,7 @@ foreach ($dates as $date => $label) {
 echo "\n--- CalendarFactory auto-detection ---\n";
 foreach (array_keys($calendars) as $cc) {
     $cal = CalendarFactory::forCountry($cc);
-    echo "  {$cc} → " . (new \ReflectionClass($cal))->getShortName() . "\n";
+    echo "  {$cc} -> " . (new \ReflectionClass($cal))->getShortName() . "\n";
 }
 
 // addBusinessDays example with Romania (Orthodox Easter 2024)
@@ -86,3 +86,19 @@ echo "// Use HungarianCalendar when sender is in Hungary:\n";
 echo "// \$client = new SuusClient(\$config, calendar: new HungarianCalendar());\n";
 echo "// Auto-detection (no override needed - client reads sender country code):\n";
 echo "// \$client = new SuusClient(\$config);\n";
+
+// Minimum loading date (+2 business days) per country - this is exactly what
+// createShipment() uses when you leave ShipmentOrder::loadingDate null.
+echo "\n--- Earliest valid loading date (+2 business days from today) ---\n";
+foreach ($calendars as $code => $cal) {
+    $earliest = $cal->minLoadingDate();                       // default: +2 business days
+    echo "  {$code}: " . $earliest->format('Y-m-d (D)') . "\n";
+}
+
+// addBusinessDays / isBusinessDay work standalone for your own scheduling too.
+echo "\n--- Standalone scheduling helpers (PL) ---\n";
+$pl    = new PolishCalendar();
+$today = new DateTimeImmutable('today');
+echo "  today is a PL business day? " . ($pl->isBusinessDay($today) ? 'yes' : 'no') . "\n";
+echo "  today + 5 PL business days = " . $pl->addBusinessDays($today, 5)->format('Y-m-d (D)') . "\n";
+

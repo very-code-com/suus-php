@@ -10,7 +10,7 @@ use VeryCodeCom\Suus\Transport\TransportResponse;
 
 final class TransportTest extends TestCase
 {
-    // ── TransportResponse::isSuccess ─────────────────────────────────
+    // -- TransportResponse::isSuccess ---------------------------------
 
     public function testIsSuccessTrueFor200(): void
     {
@@ -38,7 +38,7 @@ final class TransportTest extends TestCase
         $this->assertSame('hello', $r->body);
     }
 
-    // ── TransportRequest ─────────────────────────────────────────────
+    // -- TransportRequest ---------------------------------------------
 
     public function testTransportRequestStoresAllFields(): void
     {

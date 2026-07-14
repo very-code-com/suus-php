@@ -9,6 +9,7 @@ use VeryCodeCom\Suus\Dto\Address;
 use VeryCodeCom\Suus\Dto\Package;
 use VeryCodeCom\Suus\Dto\ShipmentOrder;
 use VeryCodeCom\Suus\Enum\Incoterm;
+use VeryCodeCom\Suus\Enum\OrderType;
 use VeryCodeCom\Suus\Enum\PackageSymbol;
 use VeryCodeCom\Suus\Exception\SuusAuthException;
 use VeryCodeCom\Suus\Exception\SuusDuplicateReferenceException;
@@ -60,13 +61,14 @@ final class SuusClientTest extends TestCase
             receiver:   new Address('Receiver GmbH', 'Hauptstr.', '5', '10115', 'Berlin', $toCountry, phone: '+4930123'),
             packages:   [new Package(PackageSymbol::KAR, weightKg: 10.0)],
             incoterms:  $incoterms,
+            orderType:  OrderType::B2B,
             loadingDate: (new PolishCalendar())->addBusinessDays(new \DateTimeImmutable('today'), 5),
         );
     }
 
-    // ──────────────────────────────────────────────
+    // ----------------------------------------------
     // createShipment - success path
-    // ──────────────────────────────────────────────
+    // ----------------------------------------------
 
     public function testCreateShipmentReturnsShipmentResult(): void
     {
@@ -89,9 +91,9 @@ final class SuusClientTest extends TestCase
         );
     }
 
-    // ──────────────────────────────────────────────
+    // ----------------------------------------------
     // createShipment - error paths
-    // ──────────────────────────────────────────────
+    // ----------------------------------------------
 
     public function testCreateShipmentThrowsDuplicateReferenceException(): void
     {
@@ -117,15 +119,15 @@ final class SuusClientTest extends TestCase
         $client->createShipment($this->makeOrder());
     }
 
-    // ──────────────────────────────────────────────
+    // ----------------------------------------------
     // createShipment - validation
-    // ──────────────────────────────────────────────
+    // ----------------------------------------------
 
     public function testCreateShipmentThrowsValidationExceptionForMissingIncoterms(): void
     {
         $this->expectException(SuusValidationException::class);
 
-        // PL → DE without incoterms should fail validation
+        // PL -> DE without incoterms should fail validation
         $client = $this->makeClient($this->mockTransport($this->fixture('add_order_success')));
         $client->createShipment($this->makeOrder(incoterms: null));
     }
@@ -145,16 +147,16 @@ final class SuusClientTest extends TestCase
 
     public function testNoValidationErrorForDomesticPlOrder(): void
     {
-        // PL → PL without incoterms is valid
+        // PL -> PL without incoterms is valid
         $client = $this->makeClient($this->mockTransport($this->fixture('add_order_success')));
         $result = $client->createShipment($this->makeOrder('PL', 'PL', null));
 
         $this->assertSame('OPLKRI2600895', $result->shipmentNo);
     }
 
-    // ──────────────────────────────────────────────
+    // ----------------------------------------------
     // fetchStatus
-    // ──────────────────────────────────────────────
+    // ----------------------------------------------
 
     public function testFetchStatusReturnsDeliveredForFullEventChain(): void
     {
@@ -186,9 +188,9 @@ final class SuusClientTest extends TestCase
         $this->assertSame('Berlin', $result->events[3]->location);
     }
 
-    // ──────────────────────────────────────────────
+    // ----------------------------------------------
     // fetchDocument
-    // ──────────────────────────────────────────────
+    // ----------------------------------------------
 
     public function testFetchDocumentReturnsPdfBytes(): void
     {
@@ -219,9 +221,9 @@ final class SuusClientTest extends TestCase
         $this->assertStringContainsString('label<', $capturedRequest->body);
     }
 
-    // ──────────────────────────────────────────────
+    // ----------------------------------------------
     // SOAP XML structure
-    // ──────────────────────────────────────────────
+    // ----------------------------------------------
 
     public function testAddOrderXmlContainsLenghtCmTypo(): void
     {
@@ -241,6 +243,7 @@ final class SuusClientTest extends TestCase
             receiver:    new Address('Recv', 'Main', '2', '10115', 'Berlin', 'DE', phone: '+4930123'),
             packages:    [new Package(PackageSymbol::KAR, weightKg: 10.0, lengthCm: 50.0, widthCm: 30.0, heightCm: 20.0)],
             incoterms:   Incoterm::DAP,
+            orderType:   OrderType::B2B,
             loadingDate: (new PolishCalendar())->addBusinessDays(new \DateTimeImmutable('today'), 5),
         );
 
@@ -298,9 +301,9 @@ final class SuusClientTest extends TestCase
         $this->assertStringNotContainsString('<consignee', $capturedRequest->body);
     }
 
-    // ──────────────────────────────────────────────
+    // ----------------------------------------------
     // createShipment - auto-computed dates
-    // ──────────────────────────────────────────────
+    // ----------------------------------------------
 
     public function testCreateShipmentWithNullLoadingDateAutoComputesDate(): void
     {
@@ -318,6 +321,7 @@ final class SuusClientTest extends TestCase
             receiver:  new Address('Recv', 'Elm St', '2', '10115', 'Berlin', 'DE', phone: '+4930123'),
             packages:  [new Package(PackageSymbol::KAR, weightKg: 10.0)],
             incoterms: Incoterm::DAP,
+            orderType: OrderType::B2B,
             // loadingDate intentionally null - should be auto-computed
         );
 
@@ -328,9 +332,9 @@ final class SuusClientTest extends TestCase
         $this->assertStringContainsString('<loadingDate', $capturedRequest->body);
     }
 
-    // ──────────────────────────────────────────────
+    // ----------------------------------------------
     // createShipment - generic API error (not auth/duplicate)
-    // ──────────────────────────────────────────────
+    // ----------------------------------------------
 
     public function testCreateShipmentThrowsGenericApiExceptionForUnknownError(): void
     {
@@ -391,9 +395,71 @@ final class SuusClientTest extends TestCase
         }
     }
 
-    // ──────────────────────────────────────────────
+    public function testCreateShipmentSurfacesReturnDescForBareCode(): void
+    {
+        // Mirrors the real BTN0001 response: no errorCodes entries, only returnDesc.
+        $xml = $this->fixture('add_order_service_unavailable');
+
+        try {
+            $this->makeClient($this->mockTransport($xml))->createShipment($this->makeOrder());
+            $this->fail('Expected SuusApiException was not thrown.');
+        } catch (\VeryCodeCom\Suus\Exception\SuusApiException $e) {
+            $this->assertSame('BTN0001', $e->returnCode);
+            $this->assertStringContainsString('BTN0001', $e->getMessage());
+            $this->assertStringContainsString('Service temporarily unavailable', $e->getMessage());
+        }
+    }
+
+    public function testApiExceptionCarriesRawResponse(): void
+    {
+        $xml = $this->fixture('add_order_service_unavailable');
+
+        try {
+            $this->makeClient($this->mockTransport($xml))->createShipment($this->makeOrder());
+            $this->fail('Expected SuusApiException was not thrown.');
+        } catch (\VeryCodeCom\Suus\Exception\SuusApiException $e) {
+            // The raw SUUS body is always attached for programmatic inspection.
+            $this->assertNotNull($e->getRawResponse());
+            $this->assertStringContainsString('BTN0001', (string) $e->getRawResponse());
+            $this->assertStringContainsString('--- Raw SUUS response ---', $e->getDebugReport());
+        }
+    }
+
+    public function testDebugModeLogsFullDebugReport(): void
+    {
+        $logMessages = [];
+        $logger = new class($logMessages) extends \Psr\Log\AbstractLogger {
+            /** @param list<string> $sink */
+            public function __construct(private array &$sink) {}
+            public function log($level, string|\Stringable $message, array $context = []): void
+            {
+                if ($level === 'error') {
+                    $this->sink[] = (string) $message;
+                }
+            }
+        };
+
+        $client = new SuusClient(
+            new SuusConfig('ws_login', 'secret', sandbox: true, debug: true),
+            $this->mockTransport($this->fixture('add_order_service_unavailable')),
+            $logger,
+            new PolishCalendar(),
+        );
+
+        try {
+            $client->createShipment($this->makeOrder());
+            $this->fail('Expected SuusApiException was not thrown.');
+        } catch (\VeryCodeCom\Suus\Exception\SuusApiException) {
+            // The debug report (raw response + stack trace) is logged at error level.
+            $joined = implode("\n", $logMessages);
+            $this->assertStringContainsString('--- Raw SUUS response ---', $joined);
+            $this->assertStringContainsString('--- Stack trace ---', $joined);
+        }
+    }
+
+    // ----------------------------------------------
     // createShipment - empty shipmentNo
-    // ──────────────────────────────────────────────
+    // ----------------------------------------------
 
     public function testCreateShipmentThrowsParseExceptionWhenShipmentNoEmpty(): void
     {
@@ -417,9 +483,9 @@ final class SuusClientTest extends TestCase
         $this->makeClient($this->mockTransport($xml))->createShipment($this->makeOrder());
     }
 
-    // ──────────────────────────────────────────────
+    // ----------------------------------------------
     // fetchDocument - error paths
-    // ──────────────────────────────────────────────
+    // ----------------------------------------------
 
     public function testFetchDocumentThrowsApiExceptionWhenSuccessFalse(): void
     {
@@ -486,9 +552,9 @@ final class SuusClientTest extends TestCase
         $this->makeClient($this->mockTransport($xml))->fetchDocument('OPLKRI2600895');
     }
 
-    // ──────────────────────────────────────────────
+    // ----------------------------------------------
     // getColliNumbers
-    // ──────────────────────────────────────────────
+    // ----------------------------------------------
 
     public function testGetColliNumbersReturnsListOfNumbers(): void
     {
@@ -517,9 +583,9 @@ final class SuusClientTest extends TestCase
         $this->assertStringContainsString('OPLKRI2600895', $capturedRequest->body);
     }
 
-    // ──────────────────────────────────────────────
+    // ----------------------------------------------
     // trackingUrl
-    // ──────────────────────────────────────────────
+    // ----------------------------------------------
 
     public function testTrackingUrlEncodesSpecialCharacters(): void
     {

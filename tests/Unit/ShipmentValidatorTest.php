@@ -9,6 +9,7 @@ use VeryCodeCom\Suus\Dto\Address;
 use VeryCodeCom\Suus\Dto\Package;
 use VeryCodeCom\Suus\Dto\ShipmentOrder;
 use VeryCodeCom\Suus\Enum\Incoterm;
+use VeryCodeCom\Suus\Enum\OrderType;
 use VeryCodeCom\Suus\Enum\PackageSymbol;
 use VeryCodeCom\Suus\Internal\Validator\ShipmentValidator;
 use PHPUnit\Framework\TestCase;
@@ -30,13 +31,17 @@ final class ShipmentValidatorTest extends TestCase
             receiver:    $overrides['receiver']     ?? new Address('Recv',   'St', '2', '10115', 'Berlin',  'DE', phone: '+4930000'),
             packages:    $overrides['packages']     ?? [new Package(PackageSymbol::KAR, weightKg: 10.0)],
             incoterms:   array_key_exists('incoterms', $overrides) ? $overrides['incoterms'] : Incoterm::DAP,
+            orderType:   $overrides['orderType']    ?? OrderType::B2B,
             loadingDate: $overrides['loadingDate']  ?? (new PolishCalendar())->addBusinessDays(new \DateTimeImmutable('today'), 5),
+            costGroup:   $overrides['costGroup']    ?? null,
+            freight:     $overrides['freight']      ?? null,
+            currency:    $overrides['currency']     ?? null,
         );
     }
 
-    // ──────────────────────────────────────────────
+    // ----------------------------------------------
     // Valid orders
-    // ──────────────────────────────────────────────
+    // ----------------------------------------------
 
     public function testValidInternationalOrderProducesNoErrors(): void
     {
@@ -53,9 +58,79 @@ final class ShipmentValidatorTest extends TestCase
         $this->assertEmpty($errors, implode('; ', $errors));
     }
 
-    // ──────────────────────────────────────────────
+    // ----------------------------------------------
+    // International header rules
+    // ----------------------------------------------
+
+    public function testInternationalOrderWithB2CIsAnError(): void
+    {
+        $errors = $this->validator->validate($this->makeOrder(['orderType' => OrderType::B2C]));
+
+        $this->assertTrue(
+            (bool) array_filter($errors, fn($e) => str_contains($e, 'B2B')),
+            'Expected a B2B-only error, got: ' . implode('; ', $errors),
+        );
+    }
+
+    public function testFreightWithoutCurrencyIsAnError(): void
+    {
+        $errors = $this->validator->validate($this->makeOrder(['freight' => '100.00']));
+
+        $this->assertTrue(
+            (bool) array_filter($errors, fn($e) => str_contains($e, 'freight and currency')),
+            'Expected a freight/currency pairing error, got: ' . implode('; ', $errors),
+        );
+    }
+
+    public function testCurrencyWithoutFreightIsAnError(): void
+    {
+        $errors = $this->validator->validate($this->makeOrder(['currency' => 'EUR']));
+
+        $this->assertTrue(
+            (bool) array_filter($errors, fn($e) => str_contains($e, 'freight and currency')),
+            'Expected a freight/currency pairing error, got: ' . implode('; ', $errors),
+        );
+    }
+
+    public function testFreightAndCurrencyTogetherProduceNoErrors(): void
+    {
+        $errors = $this->validator->validate($this->makeOrder([
+            'freight'  => '150.00',
+            'currency' => 'EUR',
+        ]));
+        $this->assertEmpty($errors, implode('; ', $errors));
+    }
+
+    public function testInvalidCurrencyLengthIsAnError(): void
+    {
+        $errors = $this->validator->validate($this->makeOrder([
+            'freight'  => '150.00',
+            'currency' => 'EURO',
+        ]));
+
+        $this->assertTrue(
+            (bool) array_filter($errors, fn($e) => str_contains($e, 'currency')),
+            'Expected a currency length error, got: ' . implode('; ', $errors),
+        );
+    }
+
+    public function testCostGroupTooLongIsAnError(): void
+    {
+        $errors = $this->validator->validate($this->makeOrder([
+            'receiver'  => new Address('Recv', 'St', '2', '30-002', 'Kraków', 'PL', phone: '+48500000'),
+            'incoterms' => null,
+            'costGroup' => str_repeat('X', 21),
+        ]));
+
+        $this->assertTrue(
+            (bool) array_filter($errors, fn($e) => str_contains($e, 'costGroup')),
+            'Expected a costGroup length error, got: ' . implode('; ', $errors),
+        );
+    }
+
+    // ----------------------------------------------
     // Incoterms
-    // ──────────────────────────────────────────────
+    // ----------------------------------------------
 
     public function testMissingIncotermsForInternationalRouteIsAnError(): void
     {
@@ -68,9 +143,9 @@ final class ShipmentValidatorTest extends TestCase
         );
     }
 
-    // ──────────────────────────────────────────────
+    // ----------------------------------------------
     // Loading date
-    // ──────────────────────────────────────────────
+    // ----------------------------------------------
 
     public function testLoadingDateInPastIsAnError(): void
     {
@@ -89,9 +164,9 @@ final class ShipmentValidatorTest extends TestCase
         $this->assertNotEmpty($errors);
     }
 
-    // ──────────────────────────────────────────────
+    // ----------------------------------------------
     // Packages - limits
-    // ──────────────────────────────────────────────
+    // ----------------------------------------------
 
     public function testTooManyPackagesIsAnError(): void
     {
@@ -121,9 +196,9 @@ final class ShipmentValidatorTest extends TestCase
         $this->assertEmpty($errors, implode('; ', $errors));
     }
 
-    // ──────────────────────────────────────────────
+    // ----------------------------------------------
     // Packages - weight limits
-    // ──────────────────────────────────────────────
+    // ----------------------------------------------
 
     public function testPackageOverMaxWeightIsAnError(): void
     {
@@ -147,7 +222,7 @@ final class ShipmentValidatorTest extends TestCase
 
     public function testTotalWeightExceedingLimitIsAnError(): void
     {
-        // 7 × 126 kg = 882 kg > 800 kg limit
+        // 7 x 126 kg = 882 kg > 800 kg limit
         $packages = array_fill(0, 7, new Package(PackageSymbol::EUR, weightKg: 126.0));
         $errors   = $this->validator->validate($this->makeOrder(['packages' => $packages]));
 
@@ -158,9 +233,9 @@ final class ShipmentValidatorTest extends TestCase
         );
     }
 
-    // ──────────────────────────────────────────────
+    // ----------------------------------------------
     // Packages - dimension limits
-    // ──────────────────────────────────────────────
+    // ----------------------------------------------
 
     public function testPackageLengthExceedingLimitIsAnError(): void
     {
@@ -231,9 +306,9 @@ final class ShipmentValidatorTest extends TestCase
         $this->assertEmpty($dimErrors, implode('; ', $errors));
     }
 
-    // ──────────────────────────────────────────────
+    // ----------------------------------------------
     // Loading date - business day check
-    // ──────────────────────────────────────────────
+    // ----------------------------------------------
 
     public function testLoadingDateOnWeekendIsAnError(): void
     {
@@ -256,9 +331,9 @@ final class ShipmentValidatorTest extends TestCase
         $this->assertEmpty($dateErrors, implode('; ', $errors));
     }
 
-    // ──────────────────────────────────────────────
+    // ----------------------------------------------
     // Address - mobilePhone length
-    // ──────────────────────────────────────────────
+    // ----------------------------------------------
 
     public function testSenderMobilePhoneTooLongIsAnError(): void
     {

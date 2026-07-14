@@ -55,9 +55,9 @@ final class SoapEnvelopeBuilderTest extends TestCase
         return $this->builder->buildAddOrder($order, '2025-09-15', '2025-09-18');
     }
 
-    // ──────────────────────────────────────────────
+    // ----------------------------------------------
     // Namespace / SOAP structure
-    // ──────────────────────────────────────────────
+    // ----------------------------------------------
 
     public function testEnvelopeHasCorrectSoapNamespace(): void
     {
@@ -72,9 +72,9 @@ final class SoapEnvelopeBuilderTest extends TestCase
         $this->assertStringContainsString('xmlns:cw="cw"', $xml);
     }
 
-    // ──────────────────────────────────────────────
+    // ----------------------------------------------
     // Auth block
-    // ──────────────────────────────────────────────
+    // ----------------------------------------------
 
     public function testAuthBlockContainsLogin(): void
     {
@@ -88,9 +88,9 @@ final class SoapEnvelopeBuilderTest extends TestCase
         $this->assertStringContainsString('<password xsi:type="xsd:string">pass456</password>', $xml);
     }
 
-    // ──────────────────────────────────────────────
+    // ----------------------------------------------
     // Package dimensions - SUUS typo guard
-    // ──────────────────────────────────────────────
+    // ----------------------------------------------
 
     public function testPackageDimensionsUseLenghtCmTypo(): void
     {
@@ -106,9 +106,9 @@ final class SoapEnvelopeBuilderTest extends TestCase
         $this->assertStringContainsString('15.5', $xml);
     }
 
-    // ──────────────────────────────────────────────
+    // ----------------------------------------------
     // International vs domestic
-    // ──────────────────────────────────────────────
+    // ----------------------------------------------
 
     public function testInternationalOrderIncludesShipper(): void
     {
@@ -134,9 +134,9 @@ final class SoapEnvelopeBuilderTest extends TestCase
         $this->assertStringNotContainsString('<consignee', $xml);
     }
 
-    // ──────────────────────────────────────────────
+    // ----------------------------------------------
     // Reference and key fields
-    // ──────────────────────────────────────────────
+    // ----------------------------------------------
 
     public function testReferenceIsInBodyForAddOrder(): void
     {
@@ -150,9 +150,9 @@ final class SoapEnvelopeBuilderTest extends TestCase
         $this->assertStringContainsString('2025-09-15', $xml);
     }
 
-    // ──────────────────────────────────────────────
+    // ----------------------------------------------
     // getDocument envelope
-    // ──────────────────────────────────────────────
+    // ----------------------------------------------
 
     public function testGetDocumentContainsShipmentNo(): void
     {
@@ -167,9 +167,9 @@ final class SoapEnvelopeBuilderTest extends TestCase
         $this->assertStringContainsString('>label<', $xml);
     }
 
-    // ──────────────────────────────────────────────
+    // ----------------------------------------------
     // getEvents envelope
-    // ──────────────────────────────────────────────
+    // ----------------------------------------------
 
     public function testGetEventsContainsShipmentNo(): void
     {

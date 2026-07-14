@@ -24,7 +24,7 @@ final class CalendarFactory
             'HU'    => new HungarianCalendar(),
             'RO'    => new RomanianCalendar(),
             'SI'    => new SlovenianCalendar(),
-            default => new PolishCalendar(), // PL and any unknown country → Polish (SUUS HQ country)
+            default => new PolishCalendar(), // PL and any unknown country -> Polish (SUUS HQ country)
         };
     }
 }

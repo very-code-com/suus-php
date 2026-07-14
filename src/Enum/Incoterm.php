@@ -6,7 +6,7 @@ namespace VeryCodeCom\Suus\Enum;
 
 /**
  * Incoterms codes supported by SUUS Logistics.
- * Required for all non PL→PL routes.
+ * Required for all non PL->PL routes.
  */
 enum Incoterm: string
 {

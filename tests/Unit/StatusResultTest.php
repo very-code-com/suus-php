@@ -15,7 +15,7 @@ final class StatusResultTest extends TestCase
         return new StatusResult($status, '', []);
     }
 
-    // ── isDelivered ──────────────────────────────────────────────────
+    // -- isDelivered --------------------------------------------------
 
     public function testIsDeliveredReturnsTrueForDelivered(): void
     {
@@ -32,7 +32,7 @@ final class StatusResultTest extends TestCase
         $this->assertFalse($this->makeResult(ShipmentStatus::Cancelled)->isDelivered());
     }
 
-    // ── isFinal ──────────────────────────────────────────────────────
+    // -- isFinal ------------------------------------------------------
 
     public function testIsFinalTrueForDelivered(): void
     {

@@ -45,6 +45,13 @@ final class SuusConfig
         public readonly int    $timeout = 30,
         /** TCP connection timeout (seconds) */
         public readonly int    $connectTimeout = 10,
+        /**
+         * When true, the client attaches the raw SUUS response to thrown
+         * exceptions and logs a full debug report (raw XML + stack trace) for
+         * every error. Useful for diagnosing unexpected / unrecognised errors.
+         * Leave false in production to keep exceptions and logs concise.
+         */
+        public readonly bool   $debug = false,
     ) {
         if (trim($login) === '') {
             throw new \InvalidArgumentException('SuusConfig: login must not be empty.');
@@ -54,7 +61,7 @@ final class SuusConfig
         }
     }
 
-    // ── Named constructors ────────────────────────────────────────────────────
+    // -- Named constructors ----------------------------------------------------
 
     public static function sandbox(string $login, string $password): self
     {
@@ -66,7 +73,7 @@ final class SuusConfig
         return new self($login, $password, sandbox: false);
     }
 
-    // ── Environment-variable factory ──────────────────────────────────────────
+    // -- Environment-variable factory ------------------------------------------
 
     /**
      * Build config from environment variables.
@@ -87,6 +94,7 @@ final class SuusConfig
         $env      = strtolower($get('SUUS_ENV') ?: 'production');
         $timeout  = (int) ($get('SUUS_TIMEOUT') ?: 30);
         $connect  = (int) ($get('SUUS_CONNECT_TIMEOUT') ?: 10);
+        $debug    = in_array(strtolower($get('SUUS_DEBUG')), ['1', 'true', 'yes', 'on'], true);
 
         if ($login === '') {
             throw new \InvalidArgumentException('SuusConfig::fromEnv(): SUUS_LOGIN env var is not set.');
@@ -101,15 +109,16 @@ final class SuusConfig
             sandbox:        $env === 'sandbox',
             timeout:        $timeout > 0 ? $timeout : 30,
             connectTimeout: $connect > 0 ? $connect : 10,
+            debug:          $debug,
         );
     }
 
-    // ── Array factory ─────────────────────────────────────────────────────────
+    // -- Array factory ---------------------------------------------------------
 
     /**
      * Build config from an associative array.
      *
-     * Keys: login*, password*, env (sandbox|production), timeout, connect_timeout
+     * Keys: login*, password*, env (sandbox|production), timeout, connect_timeout, debug
      *
      * @param array<string, mixed> $config
      * @throws \InvalidArgumentException on missing required keys.
@@ -121,6 +130,7 @@ final class SuusConfig
         $env      = strtolower((string) ($config['env'] ?? 'production'));
         $timeout  = (int) ($config['timeout']            ?? 30);
         $connect  = (int) ($config['connect_timeout']    ?? 10);
+        $debug    = (bool) ($config['debug']             ?? false);
 
         if ($login === '') {
             throw new \InvalidArgumentException('SuusConfig::fromArray(): "login" key is required.');
@@ -135,10 +145,11 @@ final class SuusConfig
             sandbox:        $env === 'sandbox',
             timeout:        $timeout > 0 ? $timeout : 30,
             connectTimeout: $connect > 0 ? $connect : 10,
+            debug:          $debug,
         );
     }
 
-    // ── Helpers ───────────────────────────────────────────────────────────────
+    // -- Helpers ---------------------------------------------------------------
 
     public function getEndpoint(): string
     {

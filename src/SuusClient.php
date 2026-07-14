@@ -15,10 +15,12 @@ use VeryCodeCom\Suus\Enum\DocumentType;
 use VeryCodeCom\Suus\Exception\SuusApiException;
 use VeryCodeCom\Suus\Exception\SuusAuthException;
 use VeryCodeCom\Suus\Exception\SuusDuplicateReferenceException;
+use VeryCodeCom\Suus\Exception\SuusException;
 use VeryCodeCom\Suus\Exception\SuusResponseParseException;
 use VeryCodeCom\Suus\Exception\SuusTransportException;
 use VeryCodeCom\Suus\Exception\SuusValidationException;
 use VeryCodeCom\Suus\Internal\Mapper\StatusMapper;
+use VeryCodeCom\Suus\Internal\Soap\ParsedResponse;
 use VeryCodeCom\Suus\Internal\Soap\ResponseParser;
 use VeryCodeCom\Suus\Internal\Soap\SoapEnvelopeBuilder;
 use VeryCodeCom\Suus\Internal\Validator\ShipmentValidator;
@@ -46,10 +48,10 @@ use Psr\Log\NullLogger;
  *   echo $result->shipmentNo;  // e.g. OPLKRI2600895
  *
  * All four SUUS API methods are supported:
- *   createShipment()  → addOrder
- *   fetchStatus()     → getEvents
- *   fetchDocument()   → getDocument  (returns raw PDF bytes)
- *   getColliNumbers() → getColliNo
+ *   createShipment()  -> addOrder
+ *   fetchStatus()     -> getEvents
+ *   fetchDocument()   -> getDocument  (returns raw PDF bytes)
+ *   getColliNumbers() -> getColliNo
  *
  * @see https://github.com/very-code-com/suus-php
  */
@@ -74,9 +76,9 @@ final class SuusClient
         $this->logger       = $logger ?? new NullLogger();
     }
 
-    // ─────────────────────────────────────────────────────────────────
+    // -----------------------------------------------------------------
     // Named constructors
-    // ─────────────────────────────────────────────────────────────────
+    // -----------------------------------------------------------------
 
     public static function sandbox(string $login, string $password): self
     {
@@ -88,9 +90,9 @@ final class SuusClient
         return new self(SuusConfig::production($login, $password), new CurlTransport());
     }
 
-    // ─────────────────────────────────────────────────────────────────
+    // -----------------------------------------------------------------
     // Public API
-    // ─────────────────────────────────────────────────────────────────
+    // -----------------------------------------------------------------
 
     /**
      * Create a shipment (SUUS method: addOrder).
@@ -112,7 +114,7 @@ final class SuusClient
         // Validate before making any network call
         $errors = $this->validator->validate($order, calendar: $calendar);
         if (!empty($errors)) {
-            throw new SuusValidationException($errors);
+            $this->fail(new SuusValidationException($errors));
         }
 
         // Compute loading / unloading dates if not provided
@@ -124,50 +126,68 @@ final class SuusClient
 
         $this->logger->info('SUUS: creating shipment', [
             'reference'    => $order->reference,
-            'route'        => $order->sender->getCountryCode() . '→' . $order->receiver->getCountryCode(),
+            'route'        => $order->sender->getCountryCode() . '->' . $order->receiver->getCountryCode(),
             'packages'     => count($order->packages),
             'loading_date' => $ld,
         ]);
 
         $envelope = $this->builder->buildAddOrder($order, $ld, $ud);
-        $xpath    = $this->call('addOrder', $envelope);
+        $parsed   = $this->call('addOrder', $envelope);
+        $xpath    = $parsed->xpath;
 
         if (!$this->parser->isSuccess($xpath)) {
             $returnCode = $this->parser->returnCode($xpath);
+            $returnDesc = $this->parser->returnDesc($xpath);
             $errorCodes = $this->parser->errorCodes($xpath);
 
             $this->logger->error('SUUS: addOrder failed', [
                 'reference'   => $order->reference,
                 'returnCode'  => $returnCode,
+                'returnDesc'  => $returnDesc,
                 'errorCodes'  => $errorCodes,
             ]);
 
             // Auth failure
             foreach ($errorCodes as $e) {
                 if ($e['code'] === 'DRG00001') {
-                    throw new SuusAuthException('SUUS authentication failed (DRG00001). Check your login/password.');
+                    $this->fail(
+                        new SuusAuthException('SUUS authentication failed (DRG00001). Check your login/password.'),
+                        $parsed->raw,
+                    );
                 }
             }
 
             // Duplicate reference
             foreach ($errorCodes as $e) {
                 if ($e['code'] === 'PRJ00310') {
-                    throw new SuusDuplicateReferenceException($order->reference);
+                    $this->fail(new SuusDuplicateReferenceException($order->reference), $parsed->raw);
                 }
             }
 
-            throw new SuusApiException(
-                "SUUS addOrder failed [{$returnCode}]: "
-                    . implode('; ', array_column($errorCodes, 'message')),
-                $returnCode,
-                $errorCodes,
+            // Prefer per-field error messages; fall back to returnDesc for bare
+            // codes (e.g. BTN0001) that carry no errorCodes entries.
+            $detail = implode('; ', array_filter(array_column($errorCodes, 'message')));
+            if ($detail === '') {
+                $detail = $returnDesc;
+            }
+
+            $this->fail(
+                new SuusApiException(
+                    trim("SUUS addOrder failed [{$returnCode}]: {$detail}"),
+                    $returnCode,
+                    $errorCodes,
+                ),
+                $parsed->raw,
             );
         }
 
         $shipmentNo = $this->parser->shipmentNo($xpath);
         if ($shipmentNo === '') {
-            throw new SuusResponseParseException(
-                'SUUS addOrder returned success=true but shipmentNo is empty.'
+            $this->fail(
+                new SuusResponseParseException(
+                    'SUUS addOrder returned success=true but shipmentNo is empty.'
+                ),
+                $parsed->raw,
             );
         }
 
@@ -198,7 +218,7 @@ final class SuusClient
         $this->logger->debug('SUUS: fetching status', ['shipmentNo' => $shipmentNo]);
 
         $envelope = $this->builder->buildGetEvents($shipmentNo);
-        $xpath    = $this->call('getEvents', $envelope);
+        $xpath    = $this->call('getEvents', $envelope)->xpath;
 
         $rawEvents    = $this->parser->events($xpath);
         $latestCode   = '';
@@ -249,28 +269,39 @@ final class SuusClient
         ]);
 
         $envelope = $this->builder->buildGetDocument($shipmentNo, $type);
-        $xpath    = $this->call('getDocument', $envelope);
+        $parsed   = $this->call('getDocument', $envelope);
+        $xpath    = $parsed->xpath;
 
         if (!$this->parser->isSuccess($xpath)) {
             $returnCode = $this->parser->returnCode($xpath);
-            throw new SuusApiException(
-                "SUUS getDocument failed [{$returnCode}] for shipment {$shipmentNo}.",
-                $returnCode,
-                $this->parser->errorCodes($xpath),
+            $returnDesc = $this->parser->returnDesc($xpath);
+            $this->fail(
+                new SuusApiException(
+                    trim("SUUS getDocument failed [{$returnCode}] for shipment {$shipmentNo}. {$returnDesc}"),
+                    $returnCode,
+                    $this->parser->errorCodes($xpath),
+                ),
+                $parsed->raw,
             );
         }
 
         $base64 = $this->parser->documentBase64($xpath);
         if ($base64 === '') {
-            throw new SuusResponseParseException(
-                "SUUS getDocument returned an empty document for shipment {$shipmentNo}."
+            $this->fail(
+                new SuusResponseParseException(
+                    "SUUS getDocument returned an empty document for shipment {$shipmentNo}."
+                ),
+                $parsed->raw,
             );
         }
 
         $pdf = base64_decode($base64, strict: true);
         if ($pdf === false) {
-            throw new SuusResponseParseException(
-                "SUUS getDocument returned an invalid Base64 payload for shipment {$shipmentNo}."
+            $this->fail(
+                new SuusResponseParseException(
+                    "SUUS getDocument returned an invalid Base64 payload for shipment {$shipmentNo}."
+                ),
+                $parsed->raw,
             );
         }
 
@@ -300,7 +331,7 @@ final class SuusClient
         $this->logger->debug('SUUS: fetching colli numbers', ['shipmentNo' => $shipmentNo]);
 
         $envelope = $this->builder->buildGetColliNo($shipmentNo);
-        $xpath    = $this->call('getColliNo', $envelope);
+        $xpath    = $this->call('getColliNo', $envelope)->xpath;
 
         return $this->parser->colliNumbers($xpath);
     }
@@ -328,7 +359,7 @@ final class SuusClient
         $this->logger->debug('SUUS: fetching delivery points');
 
         $envelope = $this->builder->buildGetDeliveryPoints();
-        $xpath    = $this->call('getDeliveryPoints', $envelope);
+        $xpath    = $this->call('getDeliveryPoints', $envelope)->xpath;
 
         $points = [];
         foreach ($this->parser->deliveryPoints($xpath) as $raw) {
@@ -348,12 +379,12 @@ final class SuusClient
         return $points;
     }
 
-    // ─────────────────────────────────────────────────────────────────
+    // -----------------------------------------------------------------
     // Internal transport
-    // ─────────────────────────────────────────────────────────────────
+    // -----------------------------------------------------------------
 
     /** @throws SuusTransportException|SuusResponseParseException */
-    private function call(string $method, string $envelope): \DOMXPath
+    private function call(string $method, string $envelope): ParsedResponse
     {
         $request = new TransportRequest(
             endpoint:       $this->config->getEndpoint(),
@@ -367,11 +398,38 @@ final class SuusClient
         $response = $this->transport->send($request);
 
         if (!$response->isSuccess()) {
-            throw new SuusTransportException(
-                "SUUS returned HTTP {$response->statusCode} for method {$method}."
+            $this->fail(
+                new SuusTransportException(
+                    "SUUS returned HTTP {$response->statusCode} for method {$method}."
+                ),
+                $response->body,
             );
         }
 
-        return $this->parser->parse($response->body, $method);
+        try {
+            $xpath = $this->parser->parse($response->body, $method);
+        } catch (SuusResponseParseException $e) {
+            $this->fail($e, $response->body);
+        }
+
+        return new ParsedResponse($xpath, $response->body);
+    }
+
+    /**
+     * Attach the raw SUUS response to an exception and, when debugging is
+     * enabled, log a full debug report (message + raw response + stack trace)
+     * before throwing. Centralises error surfacing for all API methods.
+     */
+    private function fail(SuusException $exception, ?string $rawResponse = null): never
+    {
+        if ($rawResponse !== null) {
+            $exception->withRawResponse($rawResponse);
+        }
+
+        if ($this->config->debug) {
+            $this->logger->error($exception->getDebugReport());
+        }
+
+        throw $exception;
     }
 }
