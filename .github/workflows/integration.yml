@@ -1,0 +1,92 @@
+name: Integration (SUUS sandbox)
+
+# Runs the integration suite against the real SUUS sandbox (pkt-dev.suus.com).
+# Deliberately not part of the pull-request gate:
+#   - forks cannot read secrets, so the job would be useless there;
+#   - the addOrder tests register real sandbox orders, so it must not run once per
+#     push per PHP version.
+#
+# Credentials live in the "suus-sandbox" environment rather than in repository
+# secrets: only jobs that opt into that environment can read them, and only from
+# the branches its deployment policy allows. Set these two there:
+#   SUUS_LOGIN, SUUS_PASSWORD
+# Without them the job reports "not configured" and stops; it never fails the build
+# for a missing secret.
+
+on:
+  push:
+    branches: ["master"]
+  schedule:
+    # 04:32 UTC daily, off the hour to avoid the top-of-hour runner rush.
+    - cron: "32 4 * * *"
+  workflow_dispatch:
+    inputs:
+      create_orders:
+        description: "Also run the tests that create real sandbox orders"
+        type: boolean
+        default: true
+
+# One run at a time: parallel runs share the same SUUS account.
+concurrency:
+  group: suus-sandbox-integration
+  cancel-in-progress: false
+
+jobs:
+  integration:
+    name: SUUS sandbox
+    runs-on: ubuntu-latest
+    timeout-minutes: 10
+    environment: suus-sandbox
+
+    permissions:
+      contents: read
+
+    env:
+      SUUS_SANDBOX: "1"
+      SUUS_LOGIN: ${{ secrets.SUUS_LOGIN }}
+      SUUS_PASSWORD: ${{ secrets.SUUS_PASSWORD }}
+      # addOrder tests register a real order in the sandbox. Harmless there, never
+      # acceptable against production credentials.
+      SUUS_ALLOW_ORDERS: ${{ github.event_name == 'workflow_dispatch' && inputs.create_orders == false && '0' || '1' }}
+
+    steps:
+      - uses: actions/checkout@v7
+
+      - name: Check that sandbox credentials are configured
+        id: creds
+        run: |
+          if [ -z "${SUUS_LOGIN}" ] || [ -z "${SUUS_PASSWORD}" ]; then
+            echo "configured=false" >> "$GITHUB_OUTPUT"
+            echo "::notice title=Integration tests skipped::SUUS sandbox credentials are not configured in the suus-sandbox environment."
+          else
+            echo "configured=true" >> "$GITHUB_OUTPUT"
+          fi
+
+      - name: Set up PHP
+        if: steps.creds.outputs.configured == 'true'
+        uses: shivammathur/setup-php@v2
+        with:
+          php-version: "8.3"
+          extensions: curl, dom
+          coverage: none
+
+      - name: Get Composer cache directory
+        if: steps.creds.outputs.configured == 'true'
+        id: composer-cache
+        run: echo "dir=$(composer config cache-files-dir)" >> $GITHUB_OUTPUT
+
+      - name: Cache Composer downloads
+        if: steps.creds.outputs.configured == 'true'
+        uses: actions/cache@v6
+        with:
+          path: ${{ steps.composer-cache.outputs.dir }}
+          key: ${{ runner.os }}-composer-${{ hashFiles('composer.lock') }}
+          restore-keys: ${{ runner.os }}-composer-
+
+      - name: Install dependencies
+        if: steps.creds.outputs.configured == 'true'
+        run: composer install --prefer-dist --no-progress --no-interaction
+
+      - name: Run integration tests
+        if: steps.creds.outputs.configured == 'true'
+        run: vendor/bin/phpunit --testsuite integration --testdox

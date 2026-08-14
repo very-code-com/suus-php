@@ -1,0 +1,46 @@
+# Examples
+
+Runnable scripts demonstrating every part of the `very-code-com/suus-php` client.
+
+Set your sandbox credentials once, then run any script:
+
+```bash
+export SUUS_LOGIN=ws_yourlogin
+export SUUS_PASSWORD=your_password
+
+php examples/01_create_shipment.php
+```
+
+The scripts fall back to placeholder credentials if the env vars are unset, so
+the offline ones (06, 07, 08) run with no configuration at all.
+
+| # | Script | What it shows | Needs network? |
+|---|--------|---------------|----------------|
+| 01 | [`01_create_shipment.php`](01_create_shipment.php) | Domestic PL->PL order with fully-populated addresses, mixed package types, auto-computed dates, and handling of every exception type | Yes (sandbox) |
+| 02 | [`02_international_shipment.php`](02_international_shipment.php) | International DE->PL order: incoterms, B2B rule, category, `freight`/`currency`, `costGroup`, B2B-only services | Yes (sandbox) |
+| 03 | [`03_fetch_status.php`](03_fetch_status.php) | Tracking via `getEvents`: normalized `ShipmentStatus`, event history, exhaustive `match` on status | Yes (**production** - sandbox returns `PRJ000001`) |
+| 04 | [`04_fetch_document.php`](04_fetch_document.php) | Downloading labels / shipping order / loading list as PDF, plus per-package colli numbers | Yes (**production** - sandbox returns `PRJ000001`) |
+| 05 | [`05_additional_services.php`](05_additional_services.php) | The full additional-services catalogue (COD, insurance, e-mail/SMS pre-advice, lift, pallet truck, inside delivery, domestic document-return) on a domestic B2C order | Yes (sandbox) |
+| 06 | [`06_calendar.php`](06_calendar.php) | Business-day calendars for all 9 countries, holiday comparison, Orthodox Easter (RO), `minLoadingDate`, standalone scheduling helpers | No |
+| 07 | [`07_di_and_testing.php`](07_di_and_testing.php) | Dependency injection: stub `TransportInterface` (no network), PSR-3 logger, calendar override - the pattern used by the unit tests | No |
+| 08 | [`08_validation_and_policies.php`](08_validation_and_policies.php) | Pre-flight `validate()` with typed `ValidationError`s, `ValidationPolicy` (relax the international-only rules), and `RouteClassifier` (override the domestic/international decision) - plus the SUUS-side classification caveat | No |
+| 09 | [`09_sandbox_smoke_test.php`](09_sandbox_smoke_test.php) | Connectivity smoke test: creates one sandbox shipment and prints the raw SOAP request/response | Yes (sandbox) |
+
+## Notes
+
+- **Sandbox vs production** - `getEvents` / `getDocument` / `getColliNo` only
+  return real data on production; in the sandbox they always answer `PRJ000001`.
+  Only `addOrder` (create shipment) returns usable data in the sandbox.
+- **Unique references** - the create examples derive their `reference` from the
+  current timestamp so you can re-run them without hitting `PRJ00310`
+  (duplicate reference).
+- **International routes** are B2B-only, require `incoterms`, and cannot use
+  returnable/stackable packaging or domestic-only services (SMS pre-advice, inside
+  delivery, document-return KR). Domestic routes cannot use the international-only
+  document-return service (GG). These are now enforced locally before the API
+  call and can be relaxed/redefined via `ValidationPolicy` / `RouteClassifier`
+  (see example 08).
+- **Pre-flight validation** - `SuusClient::validate()` runs every local check with
+  no network call and returns typed `ValidationError`s; see example 08.
+
+See the project [README](../README.md) for the full API reference.
