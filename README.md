@@ -151,7 +151,13 @@ surface validation in your own UI before sending. See
 Polls events via SUUS `getEvents`.
 Returns `StatusResult` with `status` (`ShipmentStatus` enum), `rawLatestCode`, `events[]`.
 
-In sandbox mode `getEvents` always returns `PRJ000001`.
+A SUUS error (e.g. `PRJ000001`, unknown shipment) raises `SuusApiException` rather than
+returning an empty event list.
+
+### `fetchStatusByReference(string $reference): StatusResult`
+
+Same call keyed by your own order reference - SUUS treats `shipmentNo` and `reference`
+as interchangeable and resolves a reference to the most recently added order carrying it.
 
 -> [full example](examples/03_fetch_status.php)
 
@@ -165,7 +171,7 @@ In sandbox mode `getEvents` always returns `PRJ000001`.
 | `ANUL`                                      | `Cancelled`                 |
 | `ZWRON`, `ZTF`                              | `Failed`                    |
 
-### `fetchDocument(string $shipmentNo, DocumentType $type): string`
+### `fetchDocument(string $shipmentNo, DocumentType $type, array $colliNumbers = []): string`
 
 Downloads a document as raw PDF bytes via SUUS `getDocument`.
 
@@ -174,17 +180,36 @@ Downloads a document as raw PDF bytes via SUUS `getDocument`.
 | `Label`         | Standard A4 shipping label     |
 | `LabelA6`       | Thermal printer label (A6)     |
 | `ShippingOrder` | Shipping order document        |
-| `LoadingList`   | Loading list                   |
+| `LoadingList`   | Loading list (see below)       |
+
+`$colliNumbers` narrows `Label` / `LabelA6` to individual packages - pass numbers from
+`getColliNumbers()`. Left empty, SUUS returns every label the shipment has.
+
+### `fetchDocumentByReference(string $reference, DocumentType $type, array $colliNumbers = []): string`
+
+Same call keyed by your own order reference instead of the waybill number.
 
 ### `fetchLabel(string $shipmentNo): string`
 
 Convenience shortcut for `fetchDocument(..., DocumentType::Label)`.
+
+### `fetchLoadingList(string $masterNo): string`
+
+The collective loading list - the one document keyed by the **master** waybill number
+rather than by shipment.
 
 -> [full example](examples/04_fetch_document.php)
 
 ### `getColliNumbers(string $shipmentNo): array`
 
 Returns per-package (colli) tracking numbers for multi-package shipments.
+
+SUUS does not return them in a stable order between calls, so treat the result as a set
+- never match a colli number to a package by index.
+
+### `getColliNumbersByReference(string $reference): array`
+
+Same call keyed by your own order reference.
 
 ---
 
@@ -431,7 +456,7 @@ All exceptions extend `VeryCodeCom\Suus\Exception\SuusException`.
 | `SuusValidationException`          | Local validation failed - carries typed `getValidationErrors(): ValidationError[]` (code + field + message) and `getErrors(): string[]` (plain messages) |
 | `SuusAuthException`                | SUUS rejects credentials (`DRG00001`)                        |
 | `SuusDuplicateReferenceException`  | Reference already exists (`PRJ00310`)                        |
-| `SuusApiException`                 | Other SUUS API errors - carries `returnCode` + `errorCodes`; the message also includes SUUS's `returnDesc` for bare codes (e.g. `BTN0001` = service temporarily unavailable) |
+| `SuusApiException`                 | Other SUUS API errors - carries `returnCode` + `errorCodes`; the message also includes SUUS's `returnDesc` for bare codes (e.g. `BTN0001` = service temporarily unavailable). Every read method raises this on `success=false`, including `PRJ000001`; none of them report a rejected request as an empty result |
 | `SuusTransportException`           | Network error or non-200 HTTP response                       |
 | `SuusResponseParseException`       | SUUS returned unparseable XML                                |
 
@@ -465,9 +490,10 @@ new SuusClient(
 1. **`lenghtCm` typo** - SUUS uses `<lenghtCm>` (missing one `t`). Preserved intentionally.
 2. **PHP's `SoapClient` is incompatible** - SUUS uses RPC/encoded SOAP 1.1. This library uses raw cURL with manually constructed XML.
 3. **Response namespace quirk** - SUUS SOAP responses swap `xmlns:cw` and `xmlns:ns1`. Child elements carry no namespace prefix.
-4. **`getEvents` / `getDocument` always fail in sandbox** - Only `addOrder` returns real data in the test environment.
-5. **Loading date minimum** - SUUS requires +2 Polish business days advance notice.
-6. **`<auth>` in every body** - Unlike most SOAP services, SUUS embeds the auth block inside every operation's body, not in the SOAP header.
+4. **`PRJ000001` often means a malformed request, not a missing order** - `getEvents`, `getColliNo` and `getDocument` all answer "order not found" when the envelope is wrong. `getEvents` / `getColliNo` need the `<shipments><shipment>` wrapper (never a bare `<shipmentNo>`), and `getDocument` names the document symbol `<document>`, not `<documentType>`.
+5. **Colli numbers nest twice** - the `<colliNo>` element in a `getColliNo` response is an `ArrayOfColli` wrapper holding `<colli><colliNo>` leaves.
+6. **Loading date minimum** - SUUS requires +2 Polish business days advance notice.
+7. **`<auth>` in every body** - Unlike most SOAP services, SUUS embeds the auth block inside every operation's body, not in the SOAP header.
 
 ---
 

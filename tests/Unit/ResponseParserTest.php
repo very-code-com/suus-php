@@ -121,6 +121,21 @@ final class ResponseParserTest extends TestCase
         $this->assertSame('KRKRI2600895-3', $numbers[2]);
     }
 
+    /**
+     * Regression: the ArrayOfColli wrapper was read instead of the <colli><colliNo>
+     * leaves, so a multi-package shipment came back as one run-together string.
+     */
+    public function testColliNumbersReadsLeavesNotTheArrayWrapper(): void
+    {
+        $xpath   = $this->parser->parse($this->fixture('get_colli_numbers_response'));
+        $numbers = $this->parser->colliNumbers($xpath);
+
+        foreach ($numbers as $number) {
+            $this->assertMatchesRegularExpression('/^[A-Z0-9-]+$/', $number);
+            $this->assertSame(14, strlen($number));
+        }
+    }
+
     public function testColliNumbersReturnsEmptyArrayWhenNonePresent(): void
     {
         $xml = <<<XML

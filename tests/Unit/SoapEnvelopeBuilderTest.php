@@ -23,7 +23,7 @@ use PHPUnit\Framework\TestCase;
  * - "lenghtCm" typo (a SUUS API bug that must not be "fixed" on our side)
  * - International orders include shipper/consignee blocks
  * - Domestic orders exclude shipper/consignee
- * - getDocument sends correct documentType element
+ * - getDocument sends the document symbol as <document>
  */
 final class SoapEnvelopeBuilderTest extends TestCase
 {
@@ -160,20 +160,89 @@ final class SoapEnvelopeBuilderTest extends TestCase
         $this->assertStringContainsString('OPLKRI2600895', $xml);
     }
 
-    public function testGetDocumentContainsDocumentTypeElement(): void
+    /** Spec 5.3 names the element <document>; <documentType> makes SUUS answer PRJ000001. */
+    public function testGetDocumentUsesDocumentElementNotDocumentType(): void
     {
         $xml = $this->builder->buildGetDocument('OPLKRI2600895', DocumentType::Label);
-        $this->assertStringContainsString('<documentType', $xml);
-        $this->assertStringContainsString('>label<', $xml);
+        $this->assertStringContainsString('<document xsi:type="xsd:string">label</document>', $xml);
+        $this->assertStringNotContainsString('<documentType', $xml);
+    }
+
+    public function testGetDocumentOmitsColliNoWhenNoneRequested(): void
+    {
+        $xml = $this->builder->buildGetDocument('OPLKRI2600895', DocumentType::Label);
+        $this->assertStringNotContainsString('<colliNo', $xml);
+    }
+
+    public function testGetDocumentWrapsRequestedColliNumbers(): void
+    {
+        $xml = $this->builder->buildGetDocument(
+            'OPLKRI2600895',
+            DocumentType::LabelA6,
+            ['WEB1705000047', 'WEB1705000048'],
+        );
+
+        $this->assertStringContainsString('<colliNo xsi:type="cw:ArrayOfColli">', $xml);
+        $this->assertStringContainsString(
+            '<colli xsi:type="cw:Colli"><colliNo xsi:type="xsd:string">WEB1705000047</colliNo></colli>',
+            $xml,
+        );
+        $this->assertStringContainsString('WEB1705000048', $xml);
+    }
+
+    public function testGetDocumentSupportsReferenceAndMasterNo(): void
+    {
+        $xml = $this->builder->buildGetDocument('', DocumentType::LoadingList, [], '', 'PKRM150000096');
+
+        $this->assertStringNotContainsString('<shipmentNo', $xml);
+        $this->assertStringContainsString('<masterNo xsi:type="xsd:string">PKRM150000096</masterNo>', $xml);
+
+        $byRef = $this->builder->buildGetDocument('', DocumentType::Label, [], 'ORDER-123');
+        $this->assertStringContainsString('<reference xsi:type="xsd:string">ORDER-123</reference>', $byRef);
     }
 
     // ----------------------------------------------
-    // getEvents envelope
+    // getEvents / getColliNo envelopes
     // ----------------------------------------------
 
     public function testGetEventsContainsShipmentNo(): void
     {
         $xml = $this->builder->buildGetEvents('OPLKRI2600895');
         $this->assertStringContainsString('OPLKRI2600895', $xml);
+    }
+
+    /**
+     * Spec 5.2 / 5.4: both methods take an ArrayOfShipments. A bare <shipmentNo>
+     * leaves the shipment list empty and SUUS answers PRJ000001 for real orders.
+     */
+    public function testGetEventsAndGetColliNoWrapShipmentInArrayOfShipments(): void
+    {
+        $envelopes = [
+            'getEvents'  => $this->builder->buildGetEvents('OPLKRI2600895'),
+            'getColliNo' => $this->builder->buildGetColliNo('OPLKRI2600895'),
+        ];
+
+        foreach ($envelopes as $method => $xml) {
+            $this->assertStringContainsString('<shipments xsi:type="cw:ArrayOfShipments">', $xml, $method);
+            $this->assertStringContainsString('<shipment xsi:type="cw:Shipment">', $xml, $method);
+            $this->assertStringContainsString(
+                '<shipmentNo xsi:type="xsd:string">OPLKRI2600895</shipmentNo>',
+                $xml,
+                $method,
+            );
+        }
+    }
+
+    public function testGetEventsAndGetColliNoAcceptReferenceInsteadOfShipmentNo(): void
+    {
+        $envelopes = [
+            'getEvents'  => $this->builder->buildGetEvents('', 'ORDER-123'),
+            'getColliNo' => $this->builder->buildGetColliNo('', 'ORDER-123'),
+        ];
+
+        foreach ($envelopes as $method => $xml) {
+            $this->assertStringContainsString('<reference xsi:type="xsd:string">ORDER-123</reference>', $xml, $method);
+            $this->assertStringNotContainsString('<shipmentNo', $xml, $method);
+        }
     }
 }

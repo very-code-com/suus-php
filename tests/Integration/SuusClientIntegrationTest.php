@@ -8,10 +8,12 @@ use VeryCodeCom\Suus\Calendar\CalendarFactory;
 use VeryCodeCom\Suus\Dto\Address;
 use VeryCodeCom\Suus\Dto\Package;
 use VeryCodeCom\Suus\Dto\ShipmentOrder;
+use VeryCodeCom\Suus\Enum\DocumentType;
 use VeryCodeCom\Suus\Enum\Incoterm;
 use VeryCodeCom\Suus\Enum\OrderType;
 use VeryCodeCom\Suus\Enum\PackageSymbol;
 use VeryCodeCom\Suus\Enum\ShipmentCategory;
+use VeryCodeCom\Suus\Exception\SuusApiException;
 use VeryCodeCom\Suus\Service\CodService;
 use VeryCodeCom\Suus\Service\EmailNotificationService;
 use VeryCodeCom\Suus\Service\InsideDeliveryService;
@@ -41,8 +43,11 @@ use PHPUnit\Framework\TestCase;
  *     and the B2B service set (COD, insurance, e-mail, lift, pallet truck). Per
  *     docs, returnable/stackable and SMS/inside-delivery are not allowed here.
  *
- * getEvents, getDocument and getColliNo always return PRJ000001 in the sandbox;
- * only addOrder returns real data, so these tests only verify addOrder.
+ * The read methods are covered too, against an order the suite creates itself: that is
+ * the only way to tell "SUUS cannot find this order" apart from "SUUS could not read the
+ * request", since both answer PRJ000001. getEvents is the exception - SUUS registers the
+ * first event asynchronously, so that test needs SUUS_EVENTS_SHIPMENT pointing at an
+ * order registered a few minutes earlier.
  */
 final class SuusClientIntegrationTest extends TestCase
 {
@@ -182,6 +187,119 @@ final class SuusClientIntegrationTest extends TestCase
 
         echo "\n[SUUS Integration] International shipment created: {$result->shipmentNo}\n";
         echo "Tracking URL: {$result->trackingUrl}\n";
+    }
+
+    /**
+     * Read-back round trip: create an order, then fetch its colli numbers and every
+     * shipment-level document for it.
+     *
+     * This is the test whose absence let three malformed request envelopes ship. Each
+     * of the read methods answers PRJ000001 ("order not found") when the request is
+     * shaped wrong, which is indistinguishable from a genuinely unknown shipment
+     * unless the order is one this test just created.
+     */
+    public function testReadBackColliNumbersAndDocumentsForAFreshOrder(): void
+    {
+        $this->skipUnlessOrdersAllowed();
+
+        $ref   = 'RT-' . date('YmdHis') . '-' . random_int(100, 999);
+        $order = new ShipmentOrder(
+            reference: $ref,
+            sender:    new Address(
+                name: 'Testowy Nadawca Sp. z o.o.', street: 'Przemysłowa', streetNo: '12',
+                postcode: '30-701', city: 'Kraków', countryCode: 'PL',
+                phone: '+48123456789', contactPerson: 'Jan Kowalski', email: 'nadawca@example.pl',
+            ),
+            receiver:  new Address(
+                name: 'Testowy Odbiorca Sp. z o.o.', street: 'Marszałkowska', streetNo: '100',
+                postcode: '00-026', city: 'Warszawa', countryCode: 'PL',
+                phone: '+48987654321', contactPerson: 'Anna Nowak', email: 'odbiorca@example.pl',
+            ),
+            // Three packages, so a wrapper-vs-leaf colli parsing bug cannot hide behind
+            // a single-package shipment that happens to come out correct either way.
+            packages: [
+                new Package(PackageSymbol::KAR, weightKg: 10.0, lengthCm: 40.0, widthCm: 30.0, heightCm: 20.0),
+                new Package(PackageSymbol::KAR, weightKg: 12.0, lengthCm: 50.0, widthCm: 40.0, heightCm: 30.0),
+                new Package(PackageSymbol::KAR, weightKg:  8.0, lengthCm: 30.0, widthCm: 20.0, heightCm: 15.0),
+            ],
+            loadingDate:   $this->loadingDate('PL'),
+            unloadingDate: $this->unloadingDate('PL'),
+            orderType:     OrderType::B2C,
+            descriptionOfGoods: 'Artykuły przemysłowe',
+        );
+
+        $shipmentNo = $this->client->createShipment($order)->shipmentNo;
+        echo "\n[SUUS Integration] Read-back shipment: {$shipmentNo} (ref {$ref})\n";
+
+        // getColliNo: one number per package, each a distinct leaf value.
+        $colli = $this->client->getColliNumbers($shipmentNo);
+        $this->assertCount(3, $colli);
+        $this->assertSame($colli, array_unique($colli), 'colli numbers must be distinct leaves');
+        foreach ($colli as $number) {
+            $this->assertMatchesRegularExpression('/^[A-Z0-9]+$/', $number);
+        }
+        // Same set by reference - but SUUS does not guarantee the order between calls,
+        // so compare as sets. Never match colli to packages by index.
+        $byRef = $this->client->getColliNumbersByReference($ref);
+        sort($colli);
+        sort($byRef);
+        $this->assertSame($colli, $byRef);
+
+        // getDocument: real PDFs, not an error page or an empty payload.
+        foreach ([DocumentType::Label, DocumentType::LabelA6, DocumentType::ShippingOrder] as $type) {
+            $pdf = $this->client->fetchDocument($shipmentNo, $type);
+            $this->assertStringStartsWith('%PDF', $pdf, $type->value);
+            $this->assertGreaterThan(1000, strlen($pdf), $type->value);
+        }
+
+        // colliNo narrows the label set: one package must be materially smaller
+        // than all three, which a request that silently ignored colliNo would not be.
+        $allLabels = $this->client->fetchDocument($shipmentNo, DocumentType::Label);
+        $oneLabel  = $this->client->fetchDocument($shipmentNo, DocumentType::Label, [$colli[0]]);
+        $this->assertStringStartsWith('%PDF', $oneLabel);
+        $this->assertLessThan(strlen($allLabels), strlen($oneLabel));
+    }
+
+    /**
+     * getEvents against an order this test just created.
+     *
+     * SUUS registers the first event (J_CR) asynchronously, a few minutes after
+     * addOrder, so a fresh order legitimately answers PRJ000001 for a while. The
+     * point of this test is that a rejected read raises rather than quietly
+     * returning an empty event list.
+     */
+    public function testReadBackEventsForAFreshOrder(): void
+    {
+        $this->skipUnlessOrdersAllowed();
+
+        $shipmentNo = getenv('SUUS_EVENTS_SHIPMENT') ?: '';
+        if ($shipmentNo === '') {
+            $this->markTestSkipped(
+                'Set SUUS_EVENTS_SHIPMENT to a shipment number registered at least a few '
+                . 'minutes ago; SUUS records the first event asynchronously.'
+            );
+        }
+
+        $status = $this->client->fetchStatus($shipmentNo);
+
+        $this->assertNotSame('', $status->rawLatestCode);
+        $this->assertNotEmpty($status->events);
+        $this->assertNotSame('', $status->events[0]->description);
+    }
+
+    /** A read that SUUS rejects must raise, never come back as an empty result. */
+    public function testRejectedReadRaisesInsteadOfReturningEmpty(): void
+    {
+        $unknown = 'OPLKRI9999999';
+
+        foreach (['fetchStatus', 'getColliNumbers', 'fetchDocument'] as $method) {
+            try {
+                $this->client->{$method}($unknown);
+                $this->fail("{$method}() returned normally for an unknown shipment.");
+            } catch (SuusApiException $e) {
+                $this->assertSame('PRJ000001', $e->returnCode, $method);
+            }
+        }
     }
 
     public function testTrackingUrlFormat(): void

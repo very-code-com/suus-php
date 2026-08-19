@@ -1,0 +1,15 @@
+<?xml version="1.0" encoding="UTF-8"?>
+<SOAP-ENV:Envelope xmlns:SOAP-ENV="http://schemas.xmlsoap.org/soap/envelope/"
+                   xmlns:cw="ns1"
+                   xmlns:xsi="http://www.w3.org/2001/XMLSchema-instance"
+                   xmlns:xsd="http://www.w3.org/2001/XMLSchema">
+  <SOAP-ENV:Body>
+    <ns1:getEventsResponse xmlns:ns1="cw">
+      <result>
+        <success xsi:type="xsd:boolean">false</success>
+        <returnCode xsi:type="xsd:string">PRJ000001</returnCode>
+        <returnDesc xsi:type="xsd:string">Nie odnaleziono zlecenia o podanym numerze listu przewozowego lub o podanej referencji</returnDesc>
+      </result>
+    </ns1:getEventsResponse>
+  </SOAP-ENV:Body>
+</SOAP-ENV:Envelope>

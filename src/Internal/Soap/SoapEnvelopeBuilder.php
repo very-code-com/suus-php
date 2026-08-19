@@ -26,6 +26,9 @@ use VeryCodeCom\Suus\SuusConfig;
  *  - Packages array requires SOAP-ENC:arrayType attribute
  *  - International orders require <shipper> and <consignee> in addition to
  *    <loadingAddress> and <unloadingAddress>
+ *  - getEvents / getColliNo take an <shipments><shipment> list, not a bare
+ *    <shipmentNo> (spec 5.2 / 5.4)
+ *  - getDocument names the document symbol <document>, not <documentType> (spec 5.3)
  *
  * @internal This class is not part of the public API and may change without notice.
  */
@@ -68,23 +71,59 @@ final class SoapEnvelopeBuilder
         return $this->envelope('addOrder', $body);
     }
 
-    public function buildGetEvents(string $shipmentNo): string
+    /**
+     * Spec 5.2: shipmentNo and reference are interchangeable - pass either.
+     */
+    public function buildGetEvents(string $shipmentNo, string $reference = ''): string
     {
-        $body = '<shipmentNo xsi:type="xsd:string">' . self::xe($shipmentNo) . '</shipmentNo>';
-        return $this->envelope('getEvents', $body);
+        return $this->envelope('getEvents', $this->shipmentsXml($shipmentNo, $reference));
     }
 
-    public function buildGetDocument(string $shipmentNo, DocumentType $type): string
-    {
-        $body = '<shipmentNo xsi:type="xsd:string">'   . self::xe($shipmentNo) . '</shipmentNo>'
-              . '<documentType xsi:type="xsd:string">' . self::xe($type->value) . '</documentType>';
+    /**
+     * Spec 5.3: the document symbol element is <document>, and shipmentNo /
+     * reference are interchangeable. masterNo is required for loadingList;
+     * colliNo selects individual packages for label / labelA6.
+     *
+     * @param string[] $colliNumbers Per-package labels; empty = the whole set.
+     */
+    public function buildGetDocument(
+        string $shipmentNo,
+        DocumentType $type,
+        array $colliNumbers = [],
+        string $reference = '',
+        string $masterNo = '',
+    ): string {
+        $body = '<document xsi:type="xsd:string">' . self::xe($type->value) . '</document>';
+
+        if ($shipmentNo !== '') {
+            $body .= '<shipmentNo xsi:type="xsd:string">' . self::xe($shipmentNo) . '</shipmentNo>';
+        }
+        if ($reference !== '') {
+            $body .= '<reference xsi:type="xsd:string">' . self::xe($reference) . '</reference>';
+        }
+        if ($masterNo !== '') {
+            $body .= '<masterNo xsi:type="xsd:string">' . self::xe($masterNo) . '</masterNo>';
+        }
+
+        if ($colliNumbers !== []) {
+            $body .= '<colliNo xsi:type="cw:ArrayOfColli">';
+            foreach ($colliNumbers as $colli) {
+                $body .= '<colli xsi:type="cw:Colli">'
+                       . '<colliNo xsi:type="xsd:string">' . self::xe($colli) . '</colliNo>'
+                       . '</colli>';
+            }
+            $body .= '</colliNo>';
+        }
+
         return $this->envelope('getDocument', $body);
     }
 
-    public function buildGetColliNo(string $shipmentNo): string
+    /**
+     * Spec 5.4: shipmentNo and reference are interchangeable - pass either.
+     */
+    public function buildGetColliNo(string $shipmentNo, string $reference = ''): string
     {
-        $body = '<shipmentNo xsi:type="xsd:string">' . self::xe($shipmentNo) . '</shipmentNo>';
-        return $this->envelope('getColliNo', $body);
+        return $this->envelope('getColliNo', $this->shipmentsXml($shipmentNo, $reference));
     }
 
     public function buildGetDeliveryPoints(): string
@@ -122,6 +161,27 @@ final class SoapEnvelopeBuilder
              . '<login xsi:type="xsd:string">'    . self::xe($this->config->login)    . '</login>'
              . '<password xsi:type="xsd:string">' . self::xe($this->config->password) . '</password>'
              . '</auth>';
+    }
+
+    /**
+     * ArrayOfShipments wrapper shared by getEvents (spec 5.2) and getColliNo (spec 5.4).
+     *
+     * Both methods take a shipment list, never a bare <shipmentNo>: sent flat, SUUS
+     * answers PRJ000001 ("order not found") for orders that exist.
+     */
+    private function shipmentsXml(string $shipmentNo, string $reference = ''): string
+    {
+        $inner = '';
+        if ($shipmentNo !== '') {
+            $inner .= '<shipmentNo xsi:type="xsd:string">' . self::xe($shipmentNo) . '</shipmentNo>';
+        }
+        if ($reference !== '') {
+            $inner .= '<reference xsi:type="xsd:string">' . self::xe($reference) . '</reference>';
+        }
+
+        return '<shipments xsi:type="cw:ArrayOfShipments">'
+             . '<shipment xsi:type="cw:Shipment">' . $inner . '</shipment>'
+             . '</shipments>';
     }
 
     private function buildHeaderXml(ShipmentOrder $order, string $loadingDate, string $unloadingDate): string

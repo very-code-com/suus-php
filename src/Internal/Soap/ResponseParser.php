@@ -128,11 +128,17 @@ final class ResponseParser
         return $this->textOf($xpath, '//document');
     }
 
-    /** @return string[] */
+    /**
+     * Colli numbers live one level deeper than the <colliNo> wrapper: the wrapper is
+     * an ArrayOfColli holding <colli><colliNo> leaves (spec 5.4). Reading the wrapper
+     * itself concatenates every child into one run-together string.
+     *
+     * @return string[]
+     */
     public function colliNumbers(\DOMXPath $xpath): array
     {
         $numbers = [];
-        $nodes   = $xpath->query('//shipments/shipment/colliNo');
+        $nodes   = $xpath->query('//shipments/shipment/colliNo/colli/colliNo');
         if ($nodes === false) {
             return [];
         }
