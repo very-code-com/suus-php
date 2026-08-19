@@ -8,6 +8,7 @@ use VeryCodeCom\Suus\Calendar\PolishCalendar;
 use VeryCodeCom\Suus\Dto\Address;
 use VeryCodeCom\Suus\Dto\Package;
 use VeryCodeCom\Suus\Dto\ShipmentOrder;
+use VeryCodeCom\Suus\Enum\DocumentType;
 use VeryCodeCom\Suus\Enum\Incoterm;
 use VeryCodeCom\Suus\Enum\OrderType;
 use VeryCodeCom\Suus\Enum\PackageSymbol;
@@ -188,6 +189,52 @@ final class SuusClientTest extends TestCase
         $this->assertSame('Berlin', $result->events[3]->location);
     }
 
+    /** Spec 5.2: a bare <shipmentNo> leaves the list empty and SUUS answers PRJ000001. */
+    public function testFetchStatusSendsShipmentsWrapper(): void
+    {
+        $capturedRequest = null;
+        $transport = $this->createMock(TransportInterface::class);
+        $transport->method('send')
+                  ->willReturnCallback(function (TransportRequest $req) use (&$capturedRequest) {
+                      $capturedRequest = $req;
+                      return new TransportResponse(200, $this->fixture('get_events_response'));
+                  });
+
+        $this->makeClient($transport)->fetchStatus('OPLKRI2600895');
+
+        $this->assertNotNull($capturedRequest);
+        $this->assertSame('getEvents', $capturedRequest->soapAction);
+        $this->assertStringContainsString('<shipments xsi:type="cw:ArrayOfShipments">', $capturedRequest->body);
+        $this->assertStringContainsString('<shipment xsi:type="cw:Shipment">', $capturedRequest->body);
+    }
+
+    public function testFetchStatusByReferenceSendsReference(): void
+    {
+        $capturedRequest = null;
+        $transport = $this->createMock(TransportInterface::class);
+        $transport->method('send')
+                  ->willReturnCallback(function (TransportRequest $req) use (&$capturedRequest) {
+                      $capturedRequest = $req;
+                      return new TransportResponse(200, $this->fixture('get_events_response'));
+                  });
+
+        $this->makeClient($transport)->fetchStatusByReference('ORDER-123');
+
+        $this->assertNotNull($capturedRequest);
+        $this->assertStringContainsString('<reference xsi:type="xsd:string">ORDER-123</reference>', $capturedRequest->body);
+        $this->assertStringNotContainsString('<shipmentNo', $capturedRequest->body);
+    }
+
+    /** A rejected getEvents must not look like "no events yet" - that is silent tracking blindness. */
+    public function testFetchStatusThrowsApiExceptionWhenSuccessFalse(): void
+    {
+        $this->expectException(\VeryCodeCom\Suus\Exception\SuusApiException::class);
+        $this->expectExceptionMessageMatches('/PRJ000001/');
+
+        $this->makeClient($this->mockTransport($this->fixture('get_events_not_found')))
+             ->fetchStatus('OPLKRI2600895');
+    }
+
     // ----------------------------------------------
     // fetchDocument
     // ----------------------------------------------
@@ -217,8 +264,63 @@ final class SuusClientTest extends TestCase
 
         $this->assertNotNull($capturedRequest);
         $this->assertStringContainsString('getDocument', $capturedRequest->soapAction);
-        $this->assertStringContainsString('<documentType', $capturedRequest->body);
-        $this->assertStringContainsString('label<', $capturedRequest->body);
+        $this->assertStringContainsString('<document xsi:type="xsd:string">label</document>', $capturedRequest->body);
+        $this->assertStringNotContainsString('<documentType', $capturedRequest->body);
+    }
+
+    public function testFetchDocumentSendsRequestedColliNumbers(): void
+    {
+        $capturedRequest = null;
+        $transport = $this->createMock(TransportInterface::class);
+        $transport->method('send')
+                  ->willReturnCallback(function (TransportRequest $req) use (&$capturedRequest) {
+                      $capturedRequest = $req;
+                      return new TransportResponse(200, $this->fixture('get_document_response'));
+                  });
+
+        $this->makeClient($transport)->fetchDocument(
+            'OPLKRI2600895',
+            DocumentType::LabelA6,
+            ['WEB1705000047'],
+        );
+
+        $this->assertNotNull($capturedRequest);
+        $this->assertStringContainsString('<colliNo xsi:type="cw:ArrayOfColli">', $capturedRequest->body);
+        $this->assertStringContainsString('WEB1705000047', $capturedRequest->body);
+    }
+
+    public function testFetchDocumentByReferenceSendsReference(): void
+    {
+        $capturedRequest = null;
+        $transport = $this->createMock(TransportInterface::class);
+        $transport->method('send')
+                  ->willReturnCallback(function (TransportRequest $req) use (&$capturedRequest) {
+                      $capturedRequest = $req;
+                      return new TransportResponse(200, $this->fixture('get_document_response'));
+                  });
+
+        $this->makeClient($transport)->fetchDocumentByReference('ORDER-123');
+
+        $this->assertNotNull($capturedRequest);
+        $this->assertStringContainsString('<reference xsi:type="xsd:string">ORDER-123</reference>', $capturedRequest->body);
+        $this->assertStringNotContainsString('<shipmentNo', $capturedRequest->body);
+    }
+
+    public function testFetchLoadingListSendsMasterNo(): void
+    {
+        $capturedRequest = null;
+        $transport = $this->createMock(TransportInterface::class);
+        $transport->method('send')
+                  ->willReturnCallback(function (TransportRequest $req) use (&$capturedRequest) {
+                      $capturedRequest = $req;
+                      return new TransportResponse(200, $this->fixture('get_document_response'));
+                  });
+
+        $this->makeClient($transport)->fetchLoadingList('PKRM150000096');
+
+        $this->assertNotNull($capturedRequest);
+        $this->assertStringContainsString('<document xsi:type="xsd:string">loadingList</document>', $capturedRequest->body);
+        $this->assertStringContainsString('<masterNo xsi:type="xsd:string">PKRM150000096</masterNo>', $capturedRequest->body);
     }
 
     // ----------------------------------------------
@@ -566,6 +668,39 @@ final class SuusClientTest extends TestCase
         $this->assertSame('KRKRI2600895-3', $numbers[2]);
     }
 
+    public function testGetColliNumbersSendsShipmentsWrapper(): void
+    {
+        $capturedRequest = null;
+        $transport = $this->createMock(TransportInterface::class);
+        $transport->method('send')
+                  ->willReturnCallback(function (TransportRequest $req) use (&$capturedRequest) {
+                      $capturedRequest = $req;
+                      return new TransportResponse(200, $this->fixture('get_colli_numbers_response'));
+                  });
+
+        $this->makeClient($transport)->getColliNumbers('OPLKRI2600895');
+
+        $this->assertNotNull($capturedRequest);
+        $this->assertStringContainsString('<shipments xsi:type="cw:ArrayOfShipments">', $capturedRequest->body);
+        $this->assertStringContainsString('<shipment xsi:type="cw:Shipment">', $capturedRequest->body);
+    }
+
+    public function testGetColliNumbersByReferenceSendsReference(): void
+    {
+        $capturedRequest = null;
+        $transport = $this->createMock(TransportInterface::class);
+        $transport->method('send')
+                  ->willReturnCallback(function (TransportRequest $req) use (&$capturedRequest) {
+                      $capturedRequest = $req;
+                      return new TransportResponse(200, $this->fixture('get_colli_numbers_response'));
+                  });
+
+        $this->makeClient($transport)->getColliNumbersByReference('ORDER-123');
+
+        $this->assertNotNull($capturedRequest);
+        $this->assertStringContainsString('<reference xsi:type="xsd:string">ORDER-123</reference>', $capturedRequest->body);
+    }
+
     public function testGetColliNumbersSendsCorrectSoapAction(): void
     {
         $capturedRequest = null;
@@ -581,6 +716,15 @@ final class SuusClientTest extends TestCase
         $this->assertNotNull($capturedRequest);
         $this->assertSame('getColliNo', $capturedRequest->soapAction);
         $this->assertStringContainsString('OPLKRI2600895', $capturedRequest->body);
+    }
+
+    public function testGetColliNumbersThrowsApiExceptionWhenSuccessFalse(): void
+    {
+        $xml = str_replace('getEventsResponse', 'getColliNoResponse', $this->fixture('get_events_not_found'));
+
+        $this->expectException(\VeryCodeCom\Suus\Exception\SuusApiException::class);
+
+        $this->makeClient($this->mockTransport($xml))->getColliNumbers('OPLKRI2600895');
     }
 
     // ----------------------------------------------

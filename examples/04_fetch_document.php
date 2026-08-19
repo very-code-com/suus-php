@@ -9,14 +9,15 @@
  *   DocumentType::Label         -> standard A4 shipping label
  *   DocumentType::LabelA6       -> A6 thermal-printer label (Zebra etc.)
  *   DocumentType::ShippingOrder -> shipping order (list przewozowy)
- *   DocumentType::LoadingList   -> consolidated loading list
+ *   DocumentType::LoadingList   -> consolidated loading list, keyed by the master
+ *                                  waybill number: use fetchLoadingList($masterNo)
  *
  * `fetchLabel()` is a shortcut for fetchDocument(..., DocumentType::Label).
- * `getColliNumbers()` returns the per-package tracking numbers you need to
- * request individual colli labels.
+ * `getColliNumbers()` returns the per-package tracking numbers, which you can hand
+ * back to `fetchDocument()` to print the label for one specific package.
  *
- * In the sandbox getDocument and getColliNo always fail with PRJ000001, so run
- * this against production with a real shipment number.
+ * Every call here also has a `...ByReference()` twin, if you hold your own order
+ * reference rather than the SUUS waybill number.
  *
  * Run:
  *   SUUS_LOGIN=ws_xxx SUUS_PASSWORD=xxx php examples/04_fetch_document.php OPLKRI2600895
@@ -57,10 +58,9 @@ try {
     file_put_contents($labelPath, $label);
     printf("  %-14s -> %s (%d bytes)\n", 'label', $labelPath, strlen($label));
 
-    // ... and the other document types explicitly.
+    // ... and the other shipment-level document types explicitly.
     $download($client, $shipmentNo, DocumentType::LabelA6, $outDir);
     $download($client, $shipmentNo, DocumentType::ShippingOrder, $outDir);
-    $download($client, $shipmentNo, DocumentType::LoadingList, $outDir);
 
     // Per-package tracking numbers (colli).
     echo "\nColli (per-package) numbers:\n";
@@ -71,6 +71,17 @@ try {
     foreach ($colli as $i => $number) {
         printf("  #%d %s\n", $i + 1, $number);
     }
+
+    // A label for one specific package rather than the whole set.
+    if ($colli !== []) {
+        $single = $client->fetchDocument($shipmentNo, DocumentType::Label, [$colli[0]]);
+        $path   = "{$outDir}/label_{$colli[0]}.pdf";
+        file_put_contents($path, $single);
+        printf("\n  single label   -> %s (%d bytes)\n", $path, strlen($single));
+    }
+
+    // The loading list is keyed by the master waybill number, not the shipment.
+    // $loadingList = $client->fetchLoadingList('PKRM150000096');
 } catch (SuusException $e) {
     echo "SUUS error: {$e->getMessage()}\n";
 }

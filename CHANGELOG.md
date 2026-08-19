@@ -11,6 +11,70 @@ This project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0.htm
 
 ---
 
+## [1.1.0] - 2026-08-19
+
+Fixes the read side of the API. `getEvents`, `getColliNo` and `getDocument` were all
+built with an envelope SUUS does not accept, so every one of them answered
+`PRJ000001` ("no order found for the given waybill number or reference") for orders
+that demonstrably existed. `addOrder` was unaffected, which is what hid the problem:
+shipments booked correctly and only reading was dead. Verified against the live
+endpoint and against the SUUS WebApi specification (WS PK 1.0, sections 5.2-5.4).
+
+### Fixed
+
+- **`getEvents` and `getColliNo` now send the documented `<shipments><shipment>`
+  wrapper.** Both take an `ArrayOfShipments`, never a bare `<shipmentNo>` (spec 5.2 /
+  5.4); sent flat, the shipment list arrives empty and SUUS reports the order as not
+  found. `fetchStatus()` returned zero events for every shipment, so a polling job
+  saw no progress ever.
+- **`getDocument` now names the document symbol `<document>`, not `<documentType>`**
+  (spec 5.3). SUUS saw no document symbol and answered `PRJ000001`, which reads as
+  "order not found" and points every investigation at the order rather than at the
+  request. Labels could not be downloaded at all.
+- **`ResponseParser::colliNumbers()` read one level too high.** The `<colliNo>`
+  element in a `getColliNo` response is an `ArrayOfColli` wrapper holding
+  `<colli><colliNo>` leaves (spec 5.4); reading the wrapper concatenated every child,
+  so a six-package shipment yielded one run-together string instead of six numbers.
+  A single-package shipment happened to come out correct, which kept this latent.
+- **`fetchStatus()` and `getColliNumbers()` no longer swallow SUUS errors.** A
+  `success=false` response raised nothing and came back as an empty result, so a
+  rejected request was indistinguishable from a shipment with no events. Both now
+  raise `SuusApiException` with the return code and description, as
+  `fetchDocument()` already did.
+
+### Added
+
+- `fetchDocument()` accepts `array $colliNumbers` to request the label for one or
+  several specific packages rather than the shipment's whole set (spec 5.3). Pass
+  numbers from `getColliNumbers()`; left empty, SUUS returns every label.
+- `fetchLoadingList(string $masterNo)` - the collective loading list is the one
+  document keyed by the master waybill number rather than by shipment, and could not
+  be requested before.
+- Reference-keyed variants of every read call, since an integration usually holds its
+  own reference rather than the SUUS waybill number and the spec treats the two as
+  interchangeable: `fetchStatusByReference()`, `fetchDocumentByReference()`,
+  `getColliNumbersByReference()`.
+
+- Integration coverage for the read side: the suite now creates a three-package order
+  and reads its colli numbers and documents back, which is the only way to tell "SUUS
+  cannot find this order" apart from "SUUS could not read the request" - both answer
+  `PRJ000001`. Verified green against the sandbox.
+
+### Notes
+
+- `PRJ000001` from SUUS means "I could not find that order" **or** "I could not read
+  your request". An order visible in the portal that the API cannot find means the
+  envelope is wrong.
+- `getEvents` lags `addOrder`. SUUS registers the first event (`J_CR`) asynchronously a
+  few minutes after the order, so a just-created shipment legitimately answers
+  `PRJ000001` for a while. This is what made the malformed envelope look like a sandbox
+  limitation for so long.
+- Colli numbers do not come back in a stable order between calls. Treat the result of
+  `getColliNumbers()` as a set; never map a colli number to a package by index.
+- No signature is broken: the new parameters are all optional and appended.
+
+---
+
 ## [1.0.0] - 2026-08-14
 
 Initial public release.
@@ -133,5 +197,6 @@ Initial public release.
 - `BTN*` codes are SUUS system errors (service temporarily unavailable), not validation
   failures; data-validation failures use the `DRG*` / `PRJ*` families.
 
-[Unreleased]: https://github.com/very-code-com/suus-php/compare/v1.0.0...HEAD
+[Unreleased]: https://github.com/very-code-com/suus-php/compare/v1.1.0...HEAD
+[1.1.0]: https://github.com/very-code-com/suus-php/compare/v1.0.0...v1.1.0
 [1.0.0]: https://github.com/very-code-com/suus-php/releases/tag/v1.0.0

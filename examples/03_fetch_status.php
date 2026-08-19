@@ -15,8 +15,11 @@
  *   Cancelled <- ANUL
  *   Failed    <- ZWRON, ZTF
  *
- * In the sandbox getEvents always returns PRJ000001, so run this against
- * production with a real shipment number to see actual events.
+ * A SUUS-side failure (PRJ000001 for an unknown shipment, for instance) raises
+ * SuusApiException; it is never reported as an empty event list.
+ *
+ * `fetchStatusByReference()` is the same call keyed by your own order reference
+ * instead of the SUUS waybill number.
  *
  * Run:
  *   SUUS_LOGIN=ws_xxx SUUS_PASSWORD=xxx php examples/03_fetch_status.php OPLKRI2600895
@@ -30,7 +33,7 @@ use VeryCodeCom\Suus\SuusClient;
 use VeryCodeCom\Suus\Enum\ShipmentStatus;
 use VeryCodeCom\Suus\Exception\SuusException;
 
-// getEvents returns real data only on production.
+// Track against the environment the shipment was created in.
 $client = SuusClient::production(
     login:    getenv('SUUS_LOGIN')    ?: 'ws_yourlogin',
     password: getenv('SUUS_PASSWORD') ?: 'your_password',

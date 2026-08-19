@@ -51,11 +51,16 @@ use Psr\Log\NullLogger;
  *
  *   echo $result->shipmentNo;  // e.g. OPLKRI2600895
  *
- * All four SUUS API methods are supported:
- *   createShipment()  -> addOrder
- *   fetchStatus()     -> getEvents
- *   fetchDocument()   -> getDocument  (returns raw PDF bytes)
- *   getColliNumbers() -> getColliNo
+ * All SUUS API methods are supported:
+ *   createShipment()     -> addOrder
+ *   fetchStatus()        -> getEvents
+ *   fetchDocument()      -> getDocument  (returns raw PDF bytes)
+ *   fetchLoadingList()   -> getDocument, keyed by master waybill number
+ *   getColliNumbers()    -> getColliNo
+ *   getDeliveryPoints()  -> getDeliveryPoints
+ *
+ * SUUS treats the waybill number and your own order reference as interchangeable,
+ * so every read method has a ...ByReference() twin.
  *
  * @see https://github.com/very-code-com/suus-php
  */
@@ -234,19 +239,42 @@ final class SuusClient
     /**
      * Poll shipment status and events (SUUS method: getEvents).
      *
-     * In the SUUS sandbox getEvents always answers PRJ000001 (order not found),
-     * regardless of the shipment number; only production returns real events.
-     *
-     * @throws SuusApiException           for SUUS API errors.
+     * @throws SuusApiException           for SUUS API errors (e.g. PRJ000001, unknown shipment).
      * @throws SuusTransportException     on network errors.
      * @throws SuusResponseParseException on malformed XML.
      */
     public function fetchStatus(string $shipmentNo): StatusResult
     {
-        $this->logger->debug('SUUS: fetching status', ['shipmentNo' => $shipmentNo]);
+        return $this->fetchEvents($shipmentNo, '');
+    }
 
-        $envelope = $this->builder->buildGetEvents($shipmentNo);
-        $xpath    = $this->call('getEvents', $envelope)->xpath;
+    /**
+     * Poll shipment status by your own order reference instead of the waybill number.
+     *
+     * Per spec 5.2 shipmentNo and reference are interchangeable; a reference resolves
+     * to the most recently added order carrying it.
+     *
+     * @throws SuusApiException           for SUUS API errors.
+     * @throws SuusTransportException     on network errors.
+     * @throws SuusResponseParseException on malformed XML.
+     */
+    public function fetchStatusByReference(string $reference): StatusResult
+    {
+        return $this->fetchEvents('', $reference);
+    }
+
+    private function fetchEvents(string $shipmentNo, string $reference): StatusResult
+    {
+        $this->logger->debug('SUUS: fetching status', [
+            'shipmentNo' => $shipmentNo,
+            'reference'  => $reference,
+        ]);
+
+        $envelope = $this->builder->buildGetEvents($shipmentNo, $reference);
+        $parsed   = $this->call('getEvents', $envelope);
+        $xpath    = $parsed->xpath;
+
+        $this->assertSuccess($parsed, 'getEvents', $shipmentNo !== '' ? $shipmentNo : $reference);
 
         $rawEvents    = $this->parser->events($xpath);
         $latestCode   = '';
@@ -281,7 +309,11 @@ final class SuusClient
     /**
      * Download a shipping document as raw PDF bytes (SUUS method: getDocument).
      *
-     * Available document types: Label (A4), LabelA6, ShippingOrder, LoadingList.
+     * Available document types: Label (A4), LabelA6, ShippingOrder. LoadingList is
+     * keyed by master waybill number - use fetchLoadingList() for it.
+     *
+     * @param string[] $colliNumbers Individual packages for label / labelA6 (spec 5.3);
+     *                               empty = every label the shipment has.
      *
      * @return string Raw PDF bytes - write to file or send with Content-Type: application/pdf.
      *
@@ -289,35 +321,82 @@ final class SuusClient
      * @throws SuusResponseParseException if the returned Base64 is empty or invalid.
      * @throws SuusTransportException     on network errors.
      */
-    public function fetchDocument(string $shipmentNo, DocumentType $type = DocumentType::Label): string
+    public function fetchDocument(
+        string $shipmentNo,
+        DocumentType $type = DocumentType::Label,
+        array $colliNumbers = [],
+    ): string {
+        return $this->requestDocument($type, $shipmentNo, '', '', $colliNumbers);
+    }
+
+    /**
+     * Download a document by your own order reference instead of the waybill number
+     * (spec 5.3: shipmentNo and reference are interchangeable).
+     *
+     * @param string[] $colliNumbers Individual packages for label / labelA6; empty = the whole set.
+     *
+     * @return string Raw PDF bytes.
+     *
+     * @throws SuusApiException           if SUUS rejects the request.
+     * @throws SuusResponseParseException if the returned Base64 is empty or invalid.
+     * @throws SuusTransportException     on network errors.
+     */
+    public function fetchDocumentByReference(
+        string $reference,
+        DocumentType $type = DocumentType::Label,
+        array $colliNumbers = [],
+    ): string {
+        return $this->requestDocument($type, '', $reference, '', $colliNumbers);
+    }
+
+    /**
+     * Download the collective loading list (SUUS document: loadingList).
+     *
+     * This is the one document keyed by the master waybill number rather than by
+     * shipment (spec 5.3: masterNo is required for loadingList).
+     *
+     * @return string Raw PDF bytes.
+     *
+     * @throws SuusApiException           if SUUS rejects the request.
+     * @throws SuusResponseParseException if the returned Base64 is empty or invalid.
+     * @throws SuusTransportException     on network errors.
+     */
+    public function fetchLoadingList(string $masterNo): string
     {
+        return $this->requestDocument(DocumentType::LoadingList, '', '', $masterNo);
+    }
+
+    /**
+     * @param string[] $colliNumbers
+     */
+    private function requestDocument(
+        DocumentType $type,
+        string $shipmentNo,
+        string $reference,
+        string $masterNo,
+        array $colliNumbers = [],
+    ): string {
+        $subject = $shipmentNo !== '' ? $shipmentNo : ($reference !== '' ? $reference : $masterNo);
+
         $this->logger->debug('SUUS: fetching document', [
             'shipmentNo'   => $shipmentNo,
+            'reference'    => $reference,
+            'masterNo'     => $masterNo,
             'documentType' => $type->value,
+            'colliNumbers' => $colliNumbers,
         ]);
 
-        $envelope = $this->builder->buildGetDocument($shipmentNo, $type);
+        $envelope = $this->builder->buildGetDocument($shipmentNo, $type, $colliNumbers, $reference, $masterNo);
         $parsed   = $this->call('getDocument', $envelope);
         $xpath    = $parsed->xpath;
 
-        if (!$this->parser->isSuccess($xpath)) {
-            $returnCode = $this->parser->returnCode($xpath);
-            $returnDesc = $this->parser->returnDesc($xpath);
-            $this->fail(
-                new SuusApiException(
-                    trim("SUUS getDocument failed [{$returnCode}] for shipment {$shipmentNo}. {$returnDesc}"),
-                    $returnCode,
-                    $this->parser->errorCodes($xpath),
-                ),
-                $parsed->raw,
-            );
-        }
+        $this->assertSuccess($parsed, 'getDocument', $subject);
 
         $base64 = $this->parser->documentBase64($xpath);
         if ($base64 === '') {
             $this->fail(
                 new SuusResponseParseException(
-                    "SUUS getDocument returned an empty document for shipment {$shipmentNo}."
+                    "SUUS getDocument returned an empty document for {$subject}."
                 ),
                 $parsed->raw,
             );
@@ -327,7 +406,7 @@ final class SuusClient
         if ($pdf === false) {
             $this->fail(
                 new SuusResponseParseException(
-                    "SUUS getDocument returned an invalid Base64 payload for shipment {$shipmentNo}."
+                    "SUUS getDocument returned an invalid Base64 payload for {$subject}."
                 ),
                 $parsed->raw,
             );
@@ -356,12 +435,38 @@ final class SuusClient
      */
     public function getColliNumbers(string $shipmentNo): array
     {
-        $this->logger->debug('SUUS: fetching colli numbers', ['shipmentNo' => $shipmentNo]);
+        return $this->fetchColliNumbers($shipmentNo, '');
+    }
 
-        $envelope = $this->builder->buildGetColliNo($shipmentNo);
-        $xpath    = $this->call('getColliNo', $envelope)->xpath;
+    /**
+     * Colli numbers by your own order reference instead of the waybill number
+     * (spec 5.4: shipmentNo and reference are interchangeable).
+     *
+     * @return string[] List of colli numbers.
+     *
+     * @throws SuusApiException           for SUUS API errors.
+     * @throws SuusTransportException     on network errors.
+     * @throws SuusResponseParseException on malformed XML.
+     */
+    public function getColliNumbersByReference(string $reference): array
+    {
+        return $this->fetchColliNumbers('', $reference);
+    }
 
-        return $this->parser->colliNumbers($xpath);
+    /** @return string[] */
+    private function fetchColliNumbers(string $shipmentNo, string $reference): array
+    {
+        $this->logger->debug('SUUS: fetching colli numbers', [
+            'shipmentNo' => $shipmentNo,
+            'reference'  => $reference,
+        ]);
+
+        $envelope = $this->builder->buildGetColliNo($shipmentNo, $reference);
+        $parsed   = $this->call('getColliNo', $envelope);
+
+        $this->assertSuccess($parsed, 'getColliNo', $shipmentNo !== '' ? $shipmentNo : $reference);
+
+        return $this->parser->colliNumbers($parsed->xpath);
     }
 
     /**
@@ -447,6 +552,34 @@ final class SuusClient
         }
 
         return new ParsedResponse($xpath, $response->body);
+    }
+
+    /**
+     * Throw a SuusApiException when SUUS answered success=false.
+     *
+     * Every read method routes through here, so a rejected request never reaches the
+     * caller as an empty result - which would be indistinguishable from a shipment
+     * that genuinely has no events, documents or colli yet.
+     *
+     * @throws SuusApiException
+     */
+    private function assertSuccess(ParsedResponse $parsed, string $method, string $subject): void
+    {
+        if ($this->parser->isSuccess($parsed->xpath)) {
+            return;
+        }
+
+        $returnCode = $this->parser->returnCode($parsed->xpath);
+        $returnDesc = $this->parser->returnDesc($parsed->xpath);
+
+        $this->fail(
+            new SuusApiException(
+                trim("SUUS {$method} failed [{$returnCode}] for {$subject}. {$returnDesc}"),
+                $returnCode,
+                $this->parser->errorCodes($parsed->xpath),
+            ),
+            $parsed->raw,
+        );
     }
 
     /**
