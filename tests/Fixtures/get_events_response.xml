@@ -16,7 +16,7 @@
             <event>
               <code xsi:type="xsd:string">J_CR</code>
               <date xsi:type="xsd:string">2025-06-01</date>
-              <time xsi:type="xsd:string">08:00:00</time>
+              <time xsi:type="xsd:string">08:00:00.776667</time>
               <description xsi:type="xsd:string">Order registered</description>
               <location xsi:type="xsd:string">Kraków</location>
             </event>

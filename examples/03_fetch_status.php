@@ -66,9 +66,10 @@ try {
         echo "  (no events yet)\n";
     }
     foreach ($status->events as $event) {
+        $occurredAt = $event->occurredAt?->format('Y-m-d H:i') ?? 'unknown time';
         $line = sprintf(
             '  [%s] %-6s %s',
-            $event->occurredAt->format('Y-m-d H:i'),
+            $occurredAt,
             $event->rawCode,
             $event->description,
         );

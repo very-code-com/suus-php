@@ -19,6 +19,7 @@ use VeryCodeCom\Suus\Exception\SuusException;
 use VeryCodeCom\Suus\Exception\SuusResponseParseException;
 use VeryCodeCom\Suus\Exception\SuusTransportException;
 use VeryCodeCom\Suus\Exception\SuusValidationException;
+use VeryCodeCom\Suus\Internal\Mapper\EventTimestampParser;
 use VeryCodeCom\Suus\Internal\Mapper\StatusMapper;
 use VeryCodeCom\Suus\Internal\Soap\ParsedResponse;
 use VeryCodeCom\Suus\Internal\Soap\ResponseParser;
@@ -68,6 +69,7 @@ final class SuusClient
 {
     private readonly SoapEnvelopeBuilder      $builder;
     private readonly ResponseParser           $parser;
+    private readonly EventTimestampParser     $eventTimestampParser;
     private readonly StatusMapper             $statusMapper;
     private readonly ShipmentValidator        $validator;
     private readonly LoggerInterface          $logger;
@@ -86,6 +88,7 @@ final class SuusClient
         $this->routeClassifier = $routeClassifier ?? new DefaultRouteClassifier();
         $this->builder         = new SoapEnvelopeBuilder($config, $this->routeClassifier);
         $this->parser          = new ResponseParser();
+        $this->eventTimestampParser = new EventTimestampParser();
         $this->statusMapper    = new StatusMapper();
         $this->validator       = new ShipmentValidator();
         $this->logger          = $logger ?? new NullLogger();
@@ -287,15 +290,11 @@ final class SuusClient
                 $latestCode = $code;
             }
 
-            $dateStr = trim($raw['date'] . ' ' . $raw['time']);
-            $dt      = \DateTimeImmutable::createFromFormat('Y-m-d H:i:s', $dateStr)
-                    ?: new \DateTimeImmutable();
-
             $events[] = new StatusEvent(
                 rawCode:     $code,
                 description: $raw['description'],
                 location:    $raw['location'],
-                occurredAt:  $dt,
+                occurredAt:  $this->eventTimestampParser->parse($raw['date'], $raw['time']),
             );
         }
 

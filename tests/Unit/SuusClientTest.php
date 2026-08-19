@@ -189,6 +189,35 @@ final class SuusClientTest extends TestCase
         $this->assertSame('Berlin', $result->events[3]->location);
     }
 
+    public function testFetchStatusParsesFractionalSecondsWithoutReplacingThemWithNow(): void
+    {
+        $client = $this->makeClient($this->mockTransport($this->fixture('get_events_response')));
+
+        $firstPoll  = $client->fetchStatus('OPLKRI2600895');
+        $secondPoll = $client->fetchStatus('OPLKRI2600895');
+
+        $this->assertNotNull($firstPoll->events[0]->occurredAt);
+        $this->assertNotNull($secondPoll->events[0]->occurredAt);
+        $this->assertSame(
+            '2025-06-01 08:00:00.776667',
+            $firstPoll->events[0]->occurredAt->format('Y-m-d H:i:s.u'),
+        );
+        $this->assertEquals($firstPoll->events[0]->occurredAt, $secondPoll->events[0]->occurredAt);
+    }
+
+    public function testFetchStatusReturnsNullForInvalidTimestamp(): void
+    {
+        $xml = str_replace(
+            ['2025-06-01', '08:00:00.776667'],
+            ['not a date', 'nonsense'],
+            $this->fixture('get_events_response'),
+        );
+
+        $result = $this->makeClient($this->mockTransport($xml))->fetchStatus('OPLKRI2600895');
+
+        $this->assertNull($result->events[0]->occurredAt);
+    }
+
     /** Spec 5.2: a bare <shipmentNo> leaves the list empty and SUUS answers PRJ000001. */
     public function testFetchStatusSendsShipmentsWrapper(): void
     {

@@ -16,7 +16,7 @@ final class StatusEvent
         public readonly string $description,
         /** Depot or city where the event occurred (may be empty). */
         public readonly string $location,
-        /** When the event occurred. */
-        public readonly \DateTimeImmutable $occurredAt,
+        /** When the event occurred; null if SUUS omitted the date or returned an invalid timestamp. */
+        public readonly ?\DateTimeImmutable $occurredAt,
     ) {}
 }
