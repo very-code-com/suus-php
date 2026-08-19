@@ -11,7 +11,7 @@ This project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0.htm
 
 ---
 
-## [1.1.0] - 2026-08-19
+## [1.0.1] - 2026-08-19
 
 Fixes the read side of the API. `getEvents`, `getColliNo` and `getDocument` were all
 built with an envelope SUUS does not accept, so every one of them answered
@@ -197,6 +197,6 @@ Initial public release.
 - `BTN*` codes are SUUS system errors (service temporarily unavailable), not validation
   failures; data-validation failures use the `DRG*` / `PRJ*` families.
 
-[Unreleased]: https://github.com/very-code-com/suus-php/compare/v1.1.0...HEAD
-[1.1.0]: https://github.com/very-code-com/suus-php/compare/v1.0.0...v1.1.0
+[Unreleased]: https://github.com/very-code-com/suus-php/compare/v1.0.1...HEAD
+[1.0.1]: https://github.com/very-code-com/suus-php/compare/v1.0.0...v1.0.1
 [1.0.0]: https://github.com/very-code-com/suus-php/releases/tag/v1.0.0
