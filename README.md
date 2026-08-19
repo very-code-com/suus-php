@@ -150,6 +150,9 @@ surface validation in your own UI before sending. See
 
 Polls events via SUUS `getEvents`.
 Returns `StatusResult` with `status` (`ShipmentStatus` enum), `rawLatestCode`, `events[]`.
+Each event's `occurredAt` is a `?DateTimeImmutable`: SUUS fractional seconds and timezone
+offsets are parsed, while a missing date or invalid timestamp is returned as `null`. The
+client never substitutes the current time for data it could not parse.
 
 A SUUS error (e.g. `PRJ000001`, unknown shipment) raises `SuusApiException` rather than
 returning an empty event list.

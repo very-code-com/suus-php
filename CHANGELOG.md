@@ -11,6 +11,25 @@ This project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0.htm
 
 ---
 
+## [1.1.0] - 2026-08-19
+
+### Fixed
+
+- `fetchStatus()` now parses the fractional seconds SUUS returns in valid `xsd:time`
+  values (for example `10:04:13.776667`). Repeated polls therefore return the same real
+  `occurredAt` value instead of replacing it with the current wall-clock time each time.
+- Event timestamp parsing accepts arbitrary fractional precision and valid `xsd:time`
+  timezone suffixes, rejects invalid calendar/clock values instead of silently normalizing
+  them, and is covered by both pure parser tests and a repeated-poll regression test.
+
+### Changed
+
+- `StatusEvent::$occurredAt` is now `?DateTimeImmutable`. If SUUS omits a date or returns
+  a timestamp the client cannot parse, the property is `null`; the client never fabricates
+  event data. This nullable DTO property is the reason for the minor-version release.
+
+---
+
 ## [1.0.1] - 2026-08-19
 
 Fixes the read side of the API. `getEvents`, `getColliNo` and `getDocument` were all
@@ -197,6 +216,7 @@ Initial public release.
 - `BTN*` codes are SUUS system errors (service temporarily unavailable), not validation
   failures; data-validation failures use the `DRG*` / `PRJ*` families.
 
-[Unreleased]: https://github.com/very-code-com/suus-php/compare/v1.0.1...HEAD
+[Unreleased]: https://github.com/very-code-com/suus-php/compare/v1.1.0...HEAD
+[1.1.0]: https://github.com/very-code-com/suus-php/compare/v1.0.1...v1.1.0
 [1.0.1]: https://github.com/very-code-com/suus-php/compare/v1.0.0...v1.0.1
 [1.0.0]: https://github.com/very-code-com/suus-php/releases/tag/v1.0.0

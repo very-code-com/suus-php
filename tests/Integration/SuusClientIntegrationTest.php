@@ -261,17 +261,14 @@ final class SuusClientIntegrationTest extends TestCase
     }
 
     /**
-     * getEvents against an order this test just created.
+     * getEvents against an existing sandbox order.
      *
      * SUUS registers the first event (J_CR) asynchronously, a few minutes after
-     * addOrder, so a fresh order legitimately answers PRJ000001 for a while. The
-     * point of this test is that a rejected read raises rather than quietly
-     * returning an empty event list.
+     * addOrder, so this deliberately uses an externally supplied, old-enough order.
+     * Two immediate reads must return the same real event time.
      */
-    public function testReadBackEventsForAFreshOrder(): void
+    public function testReadBackEventsForExistingOrderHasStableTimestamps(): void
     {
-        $this->skipUnlessOrdersAllowed();
-
         $shipmentNo = getenv('SUUS_EVENTS_SHIPMENT') ?: '';
         if ($shipmentNo === '') {
             $this->markTestSkipped(
@@ -280,11 +277,20 @@ final class SuusClientIntegrationTest extends TestCase
             );
         }
 
-        $status = $this->client->fetchStatus($shipmentNo);
+        $firstPoll  = $this->client->fetchStatus($shipmentNo);
+        $secondPoll = $this->client->fetchStatus($shipmentNo);
 
-        $this->assertNotSame('', $status->rawLatestCode);
-        $this->assertNotEmpty($status->events);
-        $this->assertNotSame('', $status->events[0]->description);
+        $this->assertNotSame('', $firstPoll->rawLatestCode);
+        $this->assertNotEmpty($firstPoll->events);
+        $this->assertNotEmpty($secondPoll->events);
+        $this->assertNotSame('', $firstPoll->events[0]->description);
+        $this->assertNotNull($firstPoll->events[0]->occurredAt);
+        $this->assertNotNull($secondPoll->events[0]->occurredAt);
+        $this->assertEquals(
+            $firstPoll->events[0]->occurredAt,
+            $secondPoll->events[0]->occurredAt,
+            'The same event must not be assigned the wall-clock time on each poll.',
+        );
     }
 
     /** A read that SUUS rejects must raise, never come back as an empty result. */
